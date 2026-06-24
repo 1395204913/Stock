@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股票分析工具</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a1a; color: #e0e0e0; min-height: 100vh; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 12px; padding: 20px 24px; margin-bottom: 20px; display: flex; align-items: center; gap: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        .header h1 { font-size: 24px; background: linear-gradient(135deg, #ff4757, #ff6b81); -webkit-background-clip: text; -webkit-text-fill-color: transparent; white-space: nowrap; }
+        .search-box { display: flex; gap: 12px; flex: 1; }
+        .search-wrapper { position: relative; flex: 1; }
+        .search-wrapper input { width: 100%; padding: 12px 16px; border: 2px solid #2a2a3e; border-radius: 8px; background: #0f0f1a; color: #fff; font-size: 14px; transition: all 0.3s; }
+        .search-wrapper input:focus { outline: none; border-color: #ff4757; box-shadow: 0 0 0 3px rgba(255,71,87,0.2); }
+        .search-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: #1a1a2e; border: 2px solid #2a2a3e; border-top: none; border-radius: 0 0 8px 8px; max-height: 300px; overflow-y: auto; z-index: 1000; display: none; box-shadow: 0 8px 20px rgba(0,0,0,0.4); }
+        .search-item { padding: 12px 16px; cursor: pointer; display: flex; align-items: center; gap: 12px; transition: background 0.2s; border-bottom: 1px solid #1f1f35; }
+        .search-item:hover { background: #16213e; }
+        .search-item .code { color: #ff4757; font-weight: 600; font-family: monospace; font-size: 15px; }
+        .search-item .name { color: #aaa; flex: 1; }
+        .search-item .market { color: #666; font-size: 12px; }
+        .btn { padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.2s; }
+        .btn:active { transform: scale(0.97); }
+        .btn-red { background: linear-gradient(135deg, #ff4757, #ff6b81); color: #fff; }
+        .btn-red:hover { box-shadow: 0 4px 15px rgba(255,71,87,0.4); }
+        .btn-green { background: linear-gradient(135deg, #2ed573, #7bed9f); color: #fff; }
+        .btn-green:hover { box-shadow: 0 4px 15px rgba(46,213,115,0.4); }
+        .info-bar { background: #1a1a2e; padding: 12px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #888; }
+        .status { display: flex; align-items: center; gap: 8px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #2ed573; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .watchlist-section { background: #1a1a2e; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .section-title { font-size: 18px; font-weight: 600; }
+        .watchlist { display: flex; gap: 12px; flex-wrap: wrap; }
+        .stock-card { background: #16213e; border-radius: 10px; padding: 14px 18px; cursor: pointer; border: 2px solid transparent; transition: all 0.3s; min-width: 150px; position: relative; }
+        .stock-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
+        .stock-card.active { border-color: #ff4757; background: #1c2d4a; }
+        .stock-card .card-code { font-size: 16px; font-weight: 700; font-family: monospace; }
+        .stock-card .card-name { font-size: 12px; color: #888; margin-top: 2px; }
+        .stock-card .card-price { font-size: 15px; margin-top: 6px; font-weight: 600; }
+        .stock-card .card-change { font-size: 12px; margin-top: 2px; }
+        .stock-card .card-remove { position: absolute; top: 8px; right: 10px; font-size: 16px; color: #555; cursor: pointer; opacity: 0; transition: all 0.2s; }
+        .stock-card:hover .card-remove { opacity: 1; }
+        .stock-card .card-remove:hover { color: #ff4757; transform: scale(1.2); }
+        .up { color: #ff4757; }
+        .down { color: #2ed573; }
+        .flat { color: #888; }
+        .empty-state { text-align: center; padding: 40px 20px; color: #555; }
+        .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+        .empty-state .text { font-size: 15px; }
+        .data-section { display: none; }
+        .indicators-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+        .indicators-grid .analysis-card { grid-column: 1 / -1; margin: 0; }
+        @media (max-width: 900px) { .indicators-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 500px) { .indicators-grid { grid-template-columns: 1fr; } }
+        .ind-card { background: #1a1a2e; border-radius: 10px; padding: 16px; }
+        .ind-card h3 { font-size: 14px; color: #ff4757; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #2a2a3e; }
+        .ind-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+        .ind-label { color: #888; }
+        .ind-value { font-weight: 600; font-family: monospace; }
+        .ind-desc { font-size: 12px; color: #666; margin-top: 10px; padding-top: 8px; border-top: 1px dashed #2a2a3e; line-height: 1.6; }
+        .analysis-card { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 12px; padding: 20px; margin-bottom: 0; border: 1px solid #2a2a3e; }
+        .analysis-card h3 { font-size: 16px; color: #ff4757; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        .analysis-card h3::before { content: ''; width: 4px; height: 18px; background: #ff4757; border-radius: 2px; }
+        .analysis-section { margin-bottom: 16px; }
+        .analysis-section:last-child { margin-bottom: 0; }
+        .analysis-section h4 { font-size: 14px; color: #feca57; margin-bottom: 8px; }
+        .analysis-section p { font-size: 13px; color: #bbb; line-height: 1.8; }
+        .analysis-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-right: 6px; }
+        .tag-up { background: rgba(255,71,87,0.2); color: #ff4757; }
+        .tag-down { background: rgba(46,213,115,0.2); color: #2ed573; }
+        .tag-neutral { background: rgba(254,202,87,0.2); color: #feca57; }
+        .chart-container { background: #1a1a2e; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+        .chart-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        .chart-title::before { content: ''; width: 4px; height: 18px; background: #ff4757; border-radius: 2px; }
+        .chart-wrapper { background: #0f0f1a; border-radius: 8px; padding: 10px; }
+        .loading { text-align: center; padding: 60px 20px; color: #888; }
+        .loading-spinner { width: 40px; height: 40px; border: 3px solid #2a2a3e; border-top-color: #ff4757; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .debug-panel { background: #1a0a0a; border: 1px solid #3a1a1a; border-radius: 8px; padding: 12px; margin-top: 20px; font-size: 12px; color: #ff6b6b; font-family: monospace; max-height: 200px; overflow-y: auto; display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📈 股票分析工具</h1>
+            <div class="search-box">
+                <div class="search-wrapper">
+                    <input type="text" id="searchInput" placeholder="输入股票代码或名称搜索..." autocomplete="off">
+                    <div class="search-dropdown" id="searchDropdown"></div>
+                </div>
+                <button class="btn btn-red" onclick="doSearch()">搜索</button>
+            </div>
+        </div>
+
+        <div class="info-bar">
+            <div class="status">
+                <div class="status-dot"></div>
+                <span>数据来源: 东方财富</span>
+            </div>
+            <span id="updateTime">最后更新: --</span>
+        </div>
+
+        <div class="watchlist-section">
+            <div class="section-header">
+                <span class="section-title">自选股</span>
+                <button class="btn btn-green" onclick="refreshAll()">刷新行情</button>
+            </div>
+            <div class="watchlist" id="watchlist">
+                <div class="empty-state">
+                    <div class="icon">🔍</div>
+                    <div class="text">暂无自选股，请搜索添加</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="data-section" id="dataSection">
+            <div class="indicators-grid" id="indicators"></div>
+            <div class="chart-container">
+                <div class="chart-title">日K线 & 均线</div>
+                <div class="chart-wrapper"><div id="chartKline" style="height:500px"></div></div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">MACD</div>
+                <div class="chart-wrapper"><div id="chartMacd" style="height:280px"></div></div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">KDJ</div>
+                <div class="chart-wrapper"><div id="chartKdj" style="height:280px"></div></div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">RSI</div>
+                <div class="chart-wrapper"><div id="chartRsi" style="height:280px"></div></div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">布林带 (BOLL)</div>
+                <div class="chart-wrapper"><div id="chartBoll" style="height:350px"></div></div>
+            </div>
+        </div>
+
+        <div class="debug-panel" id="debugPanel"></div>
+    </div>
+
+    <script>
+    // ==================== 配置 ====================
+    const STOCK_DB = [
+        {code:'600519',name:'贵州茅台',market:'1'},
+        {code:'601318',name:'中国平安',market:'1'},
+        {code:'600036',name:'招商银行',market:'1'},
+        {code:'000858',name:'五粮液',market:'0'},
+        {code:'000333',name:'美的集团',market:'0'},
+        {code:'600276',name:'恒瑞医药',market:'1'},
+        {code:'300750',name:'宁德时代',market:'0'},
+        {code:'002594',name:'比亚迪',market:'0'},
+        {code:'600900',name:'长江电力',market:'1'},
+        {code:'601398',name:'工商银行',market:'1'},
+        {code:'000001',name:'平安银行',market:'0'},
+        {code:'002415',name:'海康威视',market:'0'},
+        {code:'600887',name:'伊利股份',market:'1'},
+        {code:'000568',name:'泸州老窖',market:'0'},
+        {code:'601888',name:'中国中免',market:'1'},
+        {code:'300059',name:'东方财富',market:'0'}
+    ];
+
+    let watchlist = JSON.parse(localStorage.getItem('stock_watchlist') || '[]');
+    let selectedCode = localStorage.getItem('stock_selected') || null;
+    let charts = {};
+    let klineDataCache = {};
+
+    // ==================== 工具函数 ====================
+    function debug(msg) {
+        console.log('[DEBUG]', msg);
+        const panel = document.getElementById('debugPanel');
+        panel.style.display = 'block';
+        panel.innerHTML += new Date().toLocaleTimeString() + ' - ' + msg + '<br>';
+        panel.scrollTop = panel.scrollHeight;
+    }
+
+    function saveState() {
+        localStorage.setItem('stock_watchlist', JSON.stringify(watchlist));
+        if (selectedCode) localStorage.setItem('stock_selected', selectedCode);
+    }
+
+    function formatNum(n, digits = 2) {
+        return n != null ? Number(n).toFixed(digits) : '--';
+    }
+
+    function getChangeClass(val) {
+        if (val > 0) return 'up';
+        if (val < 0) return 'down';
+        return 'flat';
+    }
+
+    // ==================== API调用 ====================
+    async function fetchRealtimeQuotes(secids) {
+        const url = `https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&invt=2&fields=f2,f3,f4,f5,f6,f12,f14,f15,f16,f17,f18&secids=${secids}`;
+        debug('请求实时行情: ' + url);
+        try {
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const json = await resp.json();
+            debug('行情响应状态: ' + (json.data ? '成功' : '无数据'));
+            return json.data?.diff || [];
+        } catch (e) {
+            debug('行情请求失败: ' + e.message);
+            return [];
+        }
+    }
+
+    async function fetchKlineData(secid) {
+        const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${secid}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&beg=0&end=20500101&lmt=250`;
+        debug('请求K线数据: ' + url);
+        try {
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const json = await resp.json();
+            if (!json.data || !json.data.klines) {
+                debug('K线数据为空');
+                return [];
+            }
+            debug('K线数据条数: ' + json.data.klines.length);
+            return json.data.klines.map(line => {
+                const p = line.split(',');
+                return { date: p[0], open: +p[1], close: +p[2], high: +p[3], low: +p[4], volume: +p[5] };
+            });
+        } catch (e) {
+            debug('K线请求失败: ' + e.message);
+            return [];
+        }
+    }
+
+    // ==================== 核心逻辑 ====================
+    async function loadStock(code) {
+        const stock = watchlist.find(s => s.code === code);
+        if (!stock) { debug('股票不在自选: ' + code); return; }
+
+        selectedCode = code;
+        saveState();
+        renderWatchlist();
+
+        document.getElementById('dataSection').style.display = 'block';
+        document.getElementById('indicators').innerHTML = '<div class="loading"><div class="loading-spinner"></div>正在加载数据...</div>';
+
+        const secid = stock.market + '.' + code;
+        debug('加载股票: ' + stock.name + ' (' + secid + ')');
+
+        try {
+            const [kline, quotes] = await Promise.all([
+                klineDataCache[code] || fetchKlineData(secid),
+                fetchRealtimeQuotes(watchlist.map(s => s.market + '.' + s.code).join(','))
+            ]);
+
+            if (kline.length > 0) {
+                klineDataCache[code] = kline;
+            }
+
+            if (quotes.length > 0) {
+                quotes.forEach(q => {
+                    const s = watchlist.find(x => x.code === q.f12);
+                    if (s) {
+                        s.price = q.f2;
+                        s.changePercent = q.f3;
+                        s.change = q.f4;
+                        s.volume = q.f5;
+                        s.high = q.f15;
+                        s.low = q.f16;
+                        s.open = q.f17;
+                        s.yesterdayClose = q.f18;
+                    }
+                });
+                saveState();
+                renderWatchlist();
+            }
+
+            document.getElementById('updateTime').textContent = '最后更新: ' + new Date().toLocaleTimeString();
+
+            if (kline.length > 0) {
+                renderAllCharts(code, kline);
+            } else {
+                document.getElementById('indicators').innerHTML = '<div class="empty-state"><div class="text">暂无K线数据</div></div>';
+            }
+        } catch (e) {
+            debug('加载失败: ' + e.message);
+            document.getElementById('indicators').innerHTML = '<div class="empty-state"><div class="text">数据加载失败</div></div>';
+        }
+    }
+
+    async function refreshAll() {
+        if (!watchlist.length) return;
+        klineDataCache = {};
+        if (selectedCode) {
+            await loadStock(selectedCode);
+        } else {
+            await loadStock(watchlist[0].code);
+        }
+    }
+
+    function selectStock(code) {
+        loadStock(code);
+    }
+
+    function addStock(code) {
+        if (watchlist.find(s => s.code === code)) {
+            alert('该股票已在自选列表中');
+            return;
+        }
+        const stock = STOCK_DB.find(s => s.code === code);
+        if (!stock) return;
+
+        watchlist.push({ code: stock.code, name: stock.name, market: stock.market });
+        document.getElementById('searchDropdown').style.display = 'none';
+        document.getElementById('searchInput').value = '';
+        saveState();
+        renderWatchlist();
+        loadStock(code);
+    }
+
+    function removeStock(code, e) {
+        e.stopPropagation();
+        watchlist = watchlist.filter(s => s.code !== code);
+        delete klineDataCache[code];
+        if (selectedCode === code) {
+            selectedCode = watchlist.length ? watchlist[0].code : null;
+        }
+        saveState();
+        renderWatchlist();
+        if (selectedCode) {
+            loadStock(selectedCode);
+        } else {
+            document.getElementById('dataSection').style.display = 'none';
+        }
+    }
+
+    // ==================== 渲染函数 ====================
+    function renderWatchlist() {
+        const container = document.getElementById('watchlist');
+        if (!watchlist.length) {
+            container.innerHTML = '<div class="empty-state"><div class="icon">🔍</div><div class="text">暂无自选股，请搜索添加</div></div>';
+            return;
+        }
+
+        container.innerHTML = watchlist.map(s => {
+            const change = s.change || 0;
+            const changePercent = s.changePercent || 0;
+            const cls = getChangeClass(change);
+            const isActive = selectedCode === s.code;
+
+            return `
+                <div class="stock-card ${isActive ? 'active' : ''}" onclick="selectStock('${s.code}')">
+                    <span class="card-remove" onclick="removeStock('${s.code}', event)">×</span>
+                    <div class="card-code">${s.code}</div>
+                    <div class="card-name">${s.name}</div>
+                    <div class="card-price ${cls}">${formatNum(s.price)}</div>
+                    <div class="card-change ${cls}">${change >= 0 ? '+' : ''}${formatNum(changePercent)}%</div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function renderAllCharts(code, kline) {
+        const dates = kline.map(d => d.date);
+        const ohlc = kline.map(d => [d.open, d.close, d.low, d.high]);
+        const closes = kline.map(d => d.close);
+
+        const ma5 = calcMA(closes, 5);
+        const ma10 = calcMA(closes, 10);
+        const ma20 = calcMA(closes, 20);
+        const ma60 = calcMA(closes, 60);
+        const macdData = calcMACD(closes);
+        const kdjData = calcKDJ(kline);
+        const rsiData = calcRSI(closes, 6);
+        const bollData = calcBoll(closes, 20);
+
+        const lastIdx = kline.length - 1;
+        const currentPrice = closes[lastIdx];
+        const stock = watchlist.find(s => s.code === code);
+
+        // 生成分析结论
+        const analysis = generateAnalysis(currentPrice, ma5[lastIdx], ma10[lastIdx], ma20[lastIdx], ma60[lastIdx], macdData, kdjData, rsiData, bollData, lastIdx);
+
+        document.getElementById('indicators').innerHTML = `
+            <div class="ind-card">
+                <h3>均线指标 (MA)</h3>
+                <div class="ind-row"><span class="ind-label">MA5</span><span class="ind-value">${formatNum(ma5[lastIdx])}</span></div>
+                <div class="ind-row"><span class="ind-label">MA10</span><span class="ind-value">${formatNum(ma10[lastIdx])}</span></div>
+                <div class="ind-row"><span class="ind-label">MA20</span><span class="ind-value">${formatNum(ma20[lastIdx])}</span></div>
+                <div class="ind-row"><span class="ind-label">MA60</span><span class="ind-value">${formatNum(ma60[lastIdx])}</span></div>
+                <div class="ind-desc">均线反映股票平均成本。MA5/MA10为短期趋势，MA20为中期趋势，MA60为长期趋势。股价在均线上方为多头排列，下方为空头排列。</div>
+            </div>
+            <div class="ind-card">
+                <h3>MACD</h3>
+                <div class="ind-row"><span class="ind-label">DIF</span><span class="ind-value ${getChangeClass(macdData.dif[lastIdx])}">${formatNum(macdData.dif[lastIdx], 3)}</span></div>
+                <div class="ind-row"><span class="ind-label">DEA</span><span class="ind-value ${getChangeClass(macdData.dea[lastIdx])}">${formatNum(macdData.dea[lastIdx], 3)}</span></div>
+                <div class="ind-row"><span class="ind-label">MACD柱</span><span class="ind-value ${getChangeClass(macdData.hist[lastIdx])}">${formatNum(macdData.hist[lastIdx], 3)}</span></div>
+                <div class="ind-desc">MACD判断趋势强弱。DIF上穿DEA为金叉(买入信号)，下穿为死叉(卖出信号)。红柱表示多头力量，绿柱表示空头力量。</div>
+            </div>
+            <div class="ind-card">
+                <h3>KDJ</h3>
+                <div class="ind-row"><span class="ind-label">K</span><span class="ind-value">${formatNum(kdjData.k[lastIdx])}</span></div>
+                <div class="ind-row"><span class="ind-label">D</span><span class="ind-value">${formatNum(kdjData.d[lastIdx])}</span></div>
+                <div class="ind-row"><span class="ind-label">J</span><span class="ind-value">${formatNum(kdjData.j[lastIdx])}</span></div>
+                <div class="ind-desc">KDJ为超买超卖指标。K/D在80以上为超买区(可能下跌)，20以下为超卖区(可能上涨)。J值最敏感，可领先提示拐点。</div>
+            </div>
+            <div class="ind-card">
+                <h3>RSI & 布林带</h3>
+                <div class="ind-row"><span class="ind-label">RSI6</span><span class="ind-value">${formatNum(rsiData[lastIdx])}</span></div>
+                <div class="ind-row"><span class="ind-label">布林上轨</span><span class="ind-value">${formatNum(bollData.upper[bollData.upper.length-1])}</span></div>
+                <div class="ind-row"><span class="ind-label">布林中轨</span><span class="ind-value">${formatNum(bollData.mid[bollData.mid.length-1])}</span></div>
+                <div class="ind-row"><span class="ind-label">布林下轨</span><span class="ind-value">${formatNum(bollData.lower[bollData.lower.length-1])}</span></div>
+                <div class="ind-desc">RSI衡量涨跌力度，70以上超买，30以下超卖。布林带反映波动范围，股价触及上轨可能回调，触及下轨可能反弹，中轨为支撑/压力位。</div>
+            </div>
+        `;
+
+        // 移除旧的分析卡片
+        const oldCard = document.getElementById('analysisCard');
+        if (oldCard) oldCard.remove();
+
+        // 添加股票分析卡片到indicators-grid内部
+        document.getElementById('indicators').insertAdjacentHTML('beforeend', `
+            <div class="analysis-card" id="analysisCard">
+                <h3>${stock ? stock.name : code} (${code}) 技术分析</h3>
+                <div class="analysis-section">
+                    <h4>当前股价</h4>
+                    <p>现价 <strong class="${getChangeClass(currentPrice - kline[lastIdx-1].close)}">${formatNum(currentPrice)}</strong> 元，今日涨跌 <strong class="${getChangeClass(stock?.change || 0)}">${stock?.change >= 0 ? '+' : ''}${formatNum(stock?.changePercent)}%</strong></p>
+                </div>
+                ${analysis}
+            </div>
+        `);
+
+        // 销毁旧图表
+        Object.values(charts).forEach(c => { if (c && !c.isDisposed()) c.dispose(); });
+        charts = {};
+
+        // K线图
+        renderKlineChart(dates, ohlc, ma5, ma10, ma20, ma60);
+        // MACD图
+        renderMacdChart(dates, macdData);
+        // KDJ图
+        renderKdjChart(dates, kdjData);
+        // RSI图
+        renderRsiChart(dates, rsiData);
+        // 布林带图
+        renderBollChart(dates, closes, bollData);
+
+        debug('所有图表渲染完成');
+    }
+
+    function getChartBaseOption() {
+        return {
+            backgroundColor: 'transparent',
+            animation: false,
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'cross' },
+                backgroundColor: 'rgba(20,20,40,0.95)',
+                borderColor: '#333',
+                textStyle: { color: '#eee', fontSize: 12 },
+                confine: true
+            },
+            grid: {
+                left: '8%',
+                right: '3%',
+                top: '12%',
+                bottom: '15%'
+            },
+            xAxis: {
+                type: 'category',
+                data: [],
+                axisLine: { lineStyle: { color: '#333' } },
+                axisLabel: { color: '#888', fontSize: 11 },
+                splitLine: { show: false }
+            },
+            yAxis: {
+                type: 'value',
+                scale: true,
+                splitLine: { lineStyle: { color: '#1a1a2e' } },
+                axisLabel: { color: '#888', fontSize: 11 },
+                axisLine: { show: false }
+            },
+            dataZoom: [
+                { type: 'inside', start: 0, end: 100 },
+                {
+                    type: 'slider',
+                    start: 0,
+                    end: 100,
+                    height: 25,
+                    bottom: 5,
+                    borderColor: '#333',
+                    backgroundColor: '#0a0a1a',
+                    dataBackground: { lineStyle: { color: '#444' }, areaStyle: { color: '#222' } },
+                    selectedDataBackground: { lineStyle: { color: '#ff4757' }, areaStyle: { color: 'rgba(255,71,87,0.1)' } },
+                    fillerColor: 'rgba(255,71,87,0.15)',
+                    handleStyle: { color: '#ff4757', borderColor: '#ff4757' },
+                    textStyle: { color: '#888' },
+                    brushSelect: false
+                }
+            ]
+        };
+    }
+
+    function renderKlineChart(dates, ohlc, ma5, ma10, ma20, ma60) {
+        const chart = echarts.init(document.getElementById('chartKline'));
+        charts.kline = chart;
+
+        const option = getChartBaseOption();
+        option.xAxis.data = dates;
+        option.legend = {
+            data: ['K线', 'MA5', 'MA10', 'MA20', 'MA60'],
+            textStyle: { color: '#ccc' },
+            top: 5,
+            left: 'center',
+            itemWidth: 14,
+            itemHeight: 10
+        };
+        option.series = [
+            {
+                name: 'K线',
+                type: 'candlestick',
+                data: ohlc,
+                itemStyle: {
+                    color: '#ff4757',
+                    color0: '#2ed573',
+                    borderColor: '#ff4757',
+                    borderColor0: '#2ed573'
+                },
+                barWidth: '60%'
+            },
+            { name: 'MA5', type: 'line', data: ma5, smooth: true, symbol: 'none', lineStyle: { width: 1.5, color: '#ff6b6b' } },
+            { name: 'MA10', type: 'line', data: ma10, smooth: true, symbol: 'none', lineStyle: { width: 1.5, color: '#feca57' } },
+            { name: 'MA20', type: 'line', data: ma20, smooth: true, symbol: 'none', lineStyle: { width: 1.5, color: '#a29bfe' } },
+            { name: 'MA60', type: 'line', data: ma60, smooth: true, symbol: 'none', lineStyle: { width: 1.5, color: '#2ed573' } }
+        ];
+
+        chart.setOption(option);
+    }
+
+    function renderMacdChart(dates, macd) {
+        const chart = echarts.init(document.getElementById('chartMacd'));
+        charts.macd = chart;
+
+        const option = getChartBaseOption();
+        option.xAxis.data = dates;
+        option.legend = {
+            data: ['DIF', 'DEA', 'MACD'],
+            textStyle: { color: '#ccc' },
+            top: 5,
+            left: 'center'
+        };
+        option.series = [
+            { name: 'DIF', type: 'line', data: macd.dif, symbol: 'none', lineStyle: { width: 1.5, color: '#fff' } },
+            { name: 'DEA', type: 'line', data: macd.dea, symbol: 'none', lineStyle: { width: 1.5, color: '#feca57' } },
+            {
+                name: 'MACD',
+                type: 'bar',
+                data: macd.hist,
+                barWidth: '60%',
+                itemStyle: {
+                    color: function(params) {
+                        return params.data >= 0 ? '#ff4757' : '#2ed573';
+                    }
+                }
+            }
+        ];
+
+        chart.setOption(option);
+    }
+
+    function renderKdjChart(dates, kdj) {
+        const chart = echarts.init(document.getElementById('chartKdj'));
+        charts.kdj = chart;
+
+        const option = getChartBaseOption();
+        option.xAxis.data = dates;
+        option.yAxis.min = 0;
+        option.yAxis.max = 100;
+        option.legend = {
+            data: ['K', 'D', 'J'],
+            textStyle: { color: '#ccc' },
+            top: 5,
+            left: 'center'
+        };
+        option.series = [
+            { name: 'K', type: 'line', data: kdj.k, symbol: 'none', lineStyle: { width: 1.5, color: '#54a0ff' } },
+            { name: 'D', type: 'line', data: kdj.d, symbol: 'none', lineStyle: { width: 1.5, color: '#ff4757' } },
+            { name: 'J', type: 'line', data: kdj.j, symbol: 'none', lineStyle: { width: 1.5, color: '#2ed573' } }
+        ];
+
+        chart.setOption(option);
+    }
+
+    function renderRsiChart(dates, rsi) {
+        const chart = echarts.init(document.getElementById('chartRsi'));
+        charts.rsi = chart;
+
+        const option = getChartBaseOption();
+        option.xAxis.data = dates;
+        option.yAxis.min = 0;
+        option.yAxis.max = 100;
+        option.legend = {
+            data: ['RSI6'],
+            textStyle: { color: '#ccc' },
+            top: 5,
+            left: 'center'
+        };
+        option.series = [
+            {
+                name: 'RSI6',
+                type: 'line',
+                data: rsi,
+                symbol: 'none',
+                lineStyle: { width: 1.5, color: '#feca57' },
+                markLine: {
+                    silent: true,
+                    symbol: 'none',
+                    data: [
+                        { yAxis: 80, lineStyle: { color: '#ff4757', type: 'dashed', width: 1 } },
+                        { yAxis: 20, lineStyle: { color: '#2ed573', type: 'dashed', width: 1 } }
+                    ],
+                    label: { show: false }
+                }
+            }
+        ];
+
+        chart.setOption(option);
+    }
+
+    function renderBollChart(dates, closes, boll) {
+        const chart = echarts.init(document.getElementById('chartBoll'));
+        charts.boll = chart;
+
+        const option = getChartBaseOption();
+        option.xAxis.data = dates;
+        option.legend = {
+            data: ['价格', '上轨', '中轨', '下轨'],
+            textStyle: { color: '#ccc' },
+            top: 5,
+            left: 'center'
+        };
+        option.series = [
+            { name: '价格', type: 'line', data: closes, symbol: 'none', lineStyle: { width: 1.5, color: '#fff' } },
+            { name: '上轨', type: 'line', data: boll.upper, symbol: 'none', lineStyle: { width: 1.5, color: '#ff4757', type: 'dashed' } },
+            { name: '中轨', type: 'line', data: boll.mid, symbol: 'none', lineStyle: { width: 1.5, color: '#feca57' } },
+            { name: '下轨', type: 'line', data: boll.lower, symbol: 'none', lineStyle: { width: 1.5, color: '#2ed573', type: 'dashed' } }
+        ];
+
+        chart.setOption(option);
+    }
+
+    // ==================== 技术指标计算 ====================
+    function calcMA(data, period) {
+        const result = [];
+        for (let i = 0; i < data.length; i++) {
+            if (i < period - 1) {
+                result.push(null);
+            } else {
+                let sum = 0;
+                for (let j = 0; j < period; j++) {
+                    sum += data[i - j];
+                }
+                result.push(+(sum / period).toFixed(2));
+            }
+        }
+        return result;
+    }
+
+    function calcEMA(data, period) {
+        const result = [data[0]];
+        const multiplier = 2 / (period + 1);
+        for (let i = 1; i < data.length; i++) {
+            result.push(data[i] * multiplier + result[i - 1] * (1 - multiplier));
+        }
+        return result;
+    }
+
+    function calcMACD(closes) {
+        const ema12 = calcEMA(closes, 12);
+        const ema26 = calcEMA(closes, 26);
+        const dif = ema12.map((v, i) => v - ema26[i]);
+        const dea = calcEMA(dif, 9);
+        const hist = dif.map((v, i) => (v - dea[i]) * 2);
+        return {
+            dif: dif.map(v => +v.toFixed(3)),
+            dea: dea.map(v => +v.toFixed(3)),
+            hist: hist.map(v => +v.toFixed(3))
+        };
+    }
+
+    function calcKDJ(kline) {
+        const k = [], d = [], j = [];
+        let prevK = 50, prevD = 50;
+
+        for (let i = 0; i < kline.length; i++) {
+            if (i < 8) {
+                k.push(50);
+                d.push(50);
+                j.push(50);
+                continue;
+            }
+
+            let high9 = -Infinity, low9 = Infinity;
+            for (let x = i - 8; x <= i; x++) {
+                high9 = Math.max(high9, kline[x].high);
+                low9 = Math.min(low9, kline[x].low);
+            }
+
+            const rsv = high9 === low9 ? 50 : ((kline[i].close - low9) / (high9 - low9)) * 100;
+            const kVal = 2 / 3 * prevK + 1 / 3 * rsv;
+            const dVal = 2 / 3 * prevD + 1 / 3 * kVal;
+
+            k.push(+kVal.toFixed(2));
+            d.push(+dVal.toFixed(2));
+            j.push(+(3 * kVal - 2 * dVal).toFixed(2));
+
+            prevK = kVal;
+            prevD = dVal;
+        }
+
+        return { k, d, j };
+    }
+
+    function calcRSI(closes, period) {
+        const result = [];
+        for (let i = 0; i < closes.length; i++) {
+            if (i < period) {
+                result.push(null);
+                continue;
+            }
+
+            let gain = 0, loss = 0;
+            for (let j = i - period + 1; j <= i; j++) {
+                const change = closes[j] - closes[j - 1];
+                if (change > 0) gain += change;
+                else loss -= change;
+            }
+
+            const rs = loss === 0 ? 100 : gain / loss;
+            result.push(+(100 - 100 / (1 + rs)).toFixed(2));
+        }
+        return result;
+    }
+
+    function calcBoll(closes, period) {
+        const upper = [], mid = [], lower = [];
+
+        for (let i = 0; i < closes.length; i++) {
+            if (i < period - 1) continue;
+
+            let sum = 0;
+            for (let j = 0; j < period; j++) {
+                sum += closes[i - j];
+            }
+            const ma = sum / period;
+
+            let sqSum = 0;
+            for (let j = 0; j < period; j++) {
+                sqSum += Math.pow(closes[i - j] - ma, 2);
+            }
+            const std = Math.sqrt(sqSum / period);
+
+            mid.push(+ma.toFixed(2));
+            upper.push(+(ma + 2 * std).toFixed(2));
+            lower.push(+(ma - 2 * std).toFixed(2));
+        }
+
+        return { upper, mid, lower };
+    }
+
+    // ==================== 技术分析生成 ====================
+    function generateAnalysis(price, ma5, ma10, ma20, ma60, macd, kdj, rsi, boll, idx) {
+        let html = '';
+
+        // 均线分析
+        const maAnalysis = [];
+        if (price > ma5) maAnalysis.push('股价站上5日线');
+        else maAnalysis.push('股价跌破5日线');
+        if (price > ma20) maAnalysis.push('中期趋势向好');
+        else maAnalysis.push('中期趋势偏弱');
+        if (ma5 > ma10 && ma10 > ma20) maAnalysis.push('均线多头排列');
+        else if (ma5 < ma10 && ma10 < ma20) maAnalysis.push('均线空头排列');
+
+        html += `
+            <div class="analysis-section">
+                <h4>均线分析</h4>
+                <p>${maAnalysis.join('，')}。当前股价 ${formatNum(price)} 元，5日线 ${formatNum(ma5)} 元，20日线 ${formatNum(ma20)} 元。</p>
+            </div>
+        `;
+
+        // MACD分析
+        const dif = macd.dif[idx];
+        const dea = macd.dea[idx];
+        const hist = macd.hist[idx];
+        const macdAnalysis = [];
+        if (dif > dea) macdAnalysis.push('<span class="analysis-tag tag-up">DIF在DEA上方</span>多头占优');
+        else macdAnalysis.push('<span class="analysis-tag tag-down">DIF在DEA下方</span>空头占优');
+        if (hist > 0) macdAnalysis.push('红柱运行，上涨动能');
+        else macdAnalysis.push('绿柱运行，下跌动能');
+
+        html += `
+            <div class="analysis-section">
+                <h4>MACD分析</h4>
+                <p>${macdAnalysis.join('，')}。DIF: ${formatNum(dif, 3)}，DEA: ${formatNum(dea, 3)}。</p>
+            </div>
+        `;
+
+        // KDJ分析
+        const k = kdj.k[idx];
+        const d = kdj.d[idx];
+        const j = kdj.j[idx];
+        const kdjAnalysis = [];
+        if (k > 80) kdjAnalysis.push('<span class="analysis-tag tag-up">K值进入超买区</span>注意回调风险');
+        else if (k < 20) kdjAnalysis.push('<span class="analysis-tag tag-down">K值进入超卖区</span>可能存在反弹机会');
+        else kdjAnalysis.push('<span class="analysis-tag tag-neutral">K值在正常区间</span>');
+        if (k > d) kdjAnalysis.push('K线在D线上方，短期偏强');
+        else kdjAnalysis.push('K线在D线下方，短期偏弱');
+
+        html += `
+            <div class="analysis-section">
+                <h4>KDJ分析</h4>
+                <p>${kdjAnalysis.join('，')}。K: ${formatNum(k)}，D: ${formatNum(d)}，J: ${formatNum(j)}。</p>
+            </div>
+        `;
+
+        // RSI分析
+        const rsiVal = rsi[idx];
+        const rsiAnalysis = [];
+        if (rsiVal > 70) rsiAnalysis.push('<span class="analysis-tag tag-up">RSI进入超买区</span>短期可能面临调整');
+        else if (rsiVal < 30) rsiAnalysis.push('<span class="analysis-tag tag-down">RSI进入超卖区</span>短期可能出现反弹');
+        else rsiAnalysis.push('<span class="analysis-tag tag-neutral">RSI处于中性区间</span>');
+
+        html += `
+            <div class="analysis-section">
+                <h4>RSI分析</h4>
+                <p>${rsiAnalysis.join('')}。RSI6当前值: ${formatNum(rsiVal)}。</p>
+            </div>
+        `;
+
+        // 布林带分析
+        const upper = boll.upper[boll.upper.length - 1];
+        const mid = boll.mid[boll.mid.length - 1];
+        const lower = boll.lower[boll.lower.length - 1];
+        const bollAnalysis = [];
+        if (price >= upper) bollAnalysis.push('<span class="analysis-tag tag-up">股价触及布林上轨</span>短期超买，注意回调');
+        else if (price <= lower) bollAnalysis.push('<span class="analysis-tag tag-down">股价触及布林下轨</span>短期超卖，关注反弹');
+        else if (price > mid) bollAnalysis.push('<span class="analysis-tag tag-up">股价在中轨上方</span>偏强势');
+        else bollAnalysis.push('<span class="analysis-tag tag-down">股价在中轨下方</span>偏弱势');
+
+        html += `
+            <div class="analysis-section">
+                <h4>布林带分析</h4>
+                <p>${bollAnalysis.join('')}。上轨: ${formatNum(upper)}，中轨: ${formatNum(mid)}，下轨: ${formatNum(lower)}。</p>
+            </div>
+        `;
+
+        // 综合建议
+        let bullish = 0, bearish = 0;
+        if (price > ma5) bullish++; else bearish++;
+        if (price > ma20) bullish++; else bearish++;
+        if (dif > dea) bullish++; else bearish++;
+        if (hist > 0) bullish++; else bearish++;
+        if (k > 50) bullish++; else bearish++;
+        if (rsiVal > 50) bullish++; else bearish++;
+        if (price > mid) bullish++; else bearish++;
+
+        let suggestion = '';
+        let tagClass = '';
+        if (bullish >= 5) {
+            suggestion = '综合技术面偏多，可适当关注做多机会，但需注意超买风险';
+            tagClass = 'tag-up';
+        } else if (bearish >= 5) {
+            suggestion = '综合技术面偏空，建议谨慎观望，等待企稳信号';
+            tagClass = 'tag-down';
+        } else {
+            suggestion = '多空力量胶着，建议观望为主，等待方向明确';
+            tagClass = 'tag-neutral';
+        }
+
+        html += `
+            <div class="analysis-section">
+                <h4>综合建议</h4>
+                <p><span class="analysis-tag ${tagClass}">${bullish > bearish ? '偏多' : bullish < bearish ? '偏空' : '中性'}</span>${suggestion}。</p>
+            </div>
+        `;
+
+        return html;
+    }
+
+    // ==================== 搜索功能 ====================
+    function doSearch() {
+        const input = document.getElementById('searchInput').value.trim();
+        if (!input) return;
+
+        const results = STOCK_DB.filter(s =>
+            s.code.includes(input) || s.name.includes(input)
+        );
+
+        showSearchResults(results);
+    }
+
+    function showSearchResults(results) {
+        const dropdown = document.getElementById('searchDropdown');
+
+        if (results.length === 0) {
+            dropdown.style.display = 'none';
+            alert('未找到匹配的股票');
+            return;
+        }
+
+        dropdown.innerHTML = results.map(s => `
+            <div class="search-item" onclick="addStock('${s.code}')">
+                <span class="code">${s.code}</span>
+                <span class="name">${s.name}</span>
+                <span class="market">${s.market === '1' ? '沪' : '深'}</span>
+            </div>
+        `).join('');
+        dropdown.style.display = 'block';
+    }
+
+    // ==================== 事件监听 ====================
+    document.getElementById('searchInput').addEventListener('input', function(e) {
+        const value = e.target.value.trim();
+        if (!value) {
+            document.getElementById('searchDropdown').style.display = 'none';
+            return;
+        }
+
+        const results = STOCK_DB.filter(s =>
+            s.code.includes(value) || s.name.includes(value)
+        );
+        showSearchResults(results);
+    });
+
+    document.getElementById('searchInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') doSearch();
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.search-wrapper')) {
+            document.getElementById('searchDropdown').style.display = 'none';
+        }
+    });
+
+    window.addEventListener('resize', function() {
+        Object.values(charts).forEach(chart => {
+            if (chart && !chart.isDisposed()) {
+                chart.resize();
+            }
+        });
+    });
+
+    // ==================== 初始化 ====================
+    (function init() {
+        debug('页面初始化开始');
+        renderWatchlist();
+
+        if (watchlist.length > 0) {
+            const target = selectedCode && watchlist.find(s => s.code === selectedCode)
+                ? selectedCode
+                : watchlist[0].code;
+            debug('默认加载: ' + target);
+            loadStock(target);
+        } else {
+            debug('自选股列表为空');
+        }
+    })();
+    </script>
+</body>
+</html>
