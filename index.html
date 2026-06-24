@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>股票分析工具</title>
+    <title>股票 & ETF 分析工具</title>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -81,18 +81,32 @@
         .loading-spinner { width: 40px; height: 40px; border: 3px solid #2a2a3e; border-top-color: #ff4757; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .debug-panel { background: #1a0a0a; border: 1px solid #3a1a1a; border-radius: 8px; padding: 12px; margin-top: 20px; font-size: 12px; color: #ff6b6b; font-family: monospace; max-height: 200px; overflow-y: auto; display: none; }
+        .tabs { display: flex; gap: 0; margin-bottom: 20px; background: #1a1a2e; border-radius: 12px; padding: 4px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+        .tab { flex: 1; padding: 14px 24px; text-align: center; cursor: pointer; border-radius: 10px; font-size: 15px; font-weight: 600; transition: all 0.3s; color: #888; }
+        .tab:hover { color: #ccc; background: rgba(255,255,255,0.05); }
+        .tab.active { background: linear-gradient(135deg, #ff4757, #ff6b81); color: #fff; box-shadow: 0 4px 15px rgba(255,71,87,0.3); }
+        .tab-icon { margin-right: 8px; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>📈 股票分析工具</h1>
+            <h1>📈 股票 & ETF 分析</h1>
             <div class="search-box">
                 <div class="search-wrapper">
                     <input type="text" id="searchInput" placeholder="输入股票代码或名称搜索..." autocomplete="off">
                     <div class="search-dropdown" id="searchDropdown"></div>
                 </div>
                 <button class="btn btn-red" onclick="doSearch()">搜索</button>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="stock" onclick="switchTab('stock')">
+                <span class="tab-icon">📊</span>股票
+            </div>
+            <div class="tab" data-tab="etf" onclick="switchTab('etf')">
+                <span class="tab-icon">📦</span>ETF基金
             </div>
         </div>
 
@@ -106,7 +120,7 @@
 
         <div class="watchlist-section">
             <div class="section-header">
-                <span class="section-title">自选股</span>
+                <span class="section-title" id="watchlistTitle">自选股</span>
                 <button class="btn btn-green" onclick="refreshAll()">刷新行情</button>
             </div>
             <div class="watchlist" id="watchlist">
@@ -165,10 +179,51 @@
         {code:'300059',name:'东方财富',market:'0'}
     ];
 
+    const ETF_DB = [
+        {code:'510300',name:'沪深300ETF',market:'1'},
+        {code:'510500',name:'中证500ETF',market:'1'},
+        {code:'510050',name:'上证50ETF',market:'1'},
+        {code:'159919',name:'沪深300ETF',market:'0'},
+        {code:'159915',name:'创业板ETF',market:'0'},
+        {code:'159949',name:'创业板50ETF',market:'0'},
+        {code:'512100',name:'中证1000ETF',market:'1'},
+        {code:'512480',name:'半导体ETF',market:'1'},
+        {code:'512690',name:'酒ETF',market:'1'},
+        {code:'515790',name:'光伏ETF',market:'1'},
+        {code:'516160',name:'新能源ETF',market:'1'},
+        {code:'512880',name:'证券ETF',market:'1'},
+        {code:'512010',name:'医药ETF',market:'1'},
+        {code:'159869',name:'游戏ETF',market:'0'},
+        {code:'512660',name:'军工ETF',market:'1'},
+        {code:'512200',name:'房地产ETF',market:'1'},
+        {code:'159941',name:'纳指ETF',market:'0'},
+        {code:'513100',name:'纳斯达克100',market:'1'},
+        {code:'513500',name:'标普500ETF',market:'1'},
+        {code:'159920',name:'恒生ETF',market:'0'},
+        {code:'513060',name:'恒生医疗ETF',market:'1'},
+        {code:'513180',name:'恒生科技ETF',market:'1'},
+        {code:'159740',name:'恒生科技ETF',market:'0'},
+        {code:'518880',name:'黄金ETF',market:'1'},
+        {code:'159934',name:'黄金ETF',market:'0'},
+        {code:'511010',name:'国债ETF',market:'1'},
+        {code:'511260',name:'十年国债ETF',market:'1'},
+        {code:'159905',name:'深证红利ETF',market:'0'},
+        {code:'512580',name:'环保ETF',market:'1'},
+        {code:'515030',name:'新能源车ETF',market:'1'}
+    ];
+
+    let currentTab = localStorage.getItem('current_tab') || 'stock';
     let watchlist = JSON.parse(localStorage.getItem('stock_watchlist') || '[]');
+    let etfWatchlist = JSON.parse(localStorage.getItem('etf_watchlist') || '[]');
     let selectedCode = localStorage.getItem('stock_selected') || null;
+    let selectedEtfCode = localStorage.getItem('etf_selected') || null;
     let charts = {};
     let klineDataCache = {};
+
+    function getActiveDB() { return currentTab === 'stock' ? STOCK_DB : ETF_DB; }
+    function getActiveWatchlist() { return currentTab === 'stock' ? watchlist : etfWatchlist; }
+    function getActiveSelected() { return currentTab === 'stock' ? selectedCode : selectedEtfCode; }
+    function setActiveSelected(code) { if (currentTab === 'stock') selectedCode = code; else selectedEtfCode = code; }
 
     // ==================== 工具函数 ====================
     function debug(msg) {
@@ -181,7 +236,10 @@
 
     function saveState() {
         localStorage.setItem('stock_watchlist', JSON.stringify(watchlist));
+        localStorage.setItem('etf_watchlist', JSON.stringify(etfWatchlist));
+        localStorage.setItem('current_tab', currentTab);
         if (selectedCode) localStorage.setItem('stock_selected', selectedCode);
+        if (selectedEtfCode) localStorage.setItem('etf_selected', selectedEtfCode);
     }
 
     function formatNum(n, digits = 2) {
@@ -233,11 +291,42 @@
     }
 
     // ==================== 核心逻辑 ====================
-    async function loadStock(code) {
-        const stock = watchlist.find(s => s.code === code);
-        if (!stock) { debug('股票不在自选: ' + code); return; }
+    function switchTab(tab) {
+        currentTab = tab;
+        saveState();
+        
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelector(`.tab[data-tab="${tab}"]`).classList.add('active');
+        
+        document.getElementById('searchInput').placeholder = tab === 'stock' 
+            ? '输入股票代码或名称搜索...' 
+            : '输入ETF代码或名称搜索...';
+        
+        document.getElementById('watchlistTitle').textContent = tab === 'stock' ? '自选股' : '自选ETF';
+        
+        document.getElementById('searchDropdown').style.display = 'none';
+        document.getElementById('searchInput').value = '';
+        
+        renderWatchlist();
+        
+        const activeSelected = getActiveSelected();
+        const activeWatchlist = getActiveWatchlist();
+        
+        if (activeSelected && activeWatchlist.find(s => s.code === activeSelected)) {
+            loadStock(activeSelected);
+        } else if (activeWatchlist.length > 0) {
+            loadStock(activeWatchlist[0].code);
+        } else {
+            document.getElementById('dataSection').style.display = 'none';
+        }
+    }
 
-        selectedCode = code;
+    async function loadStock(code) {
+        const activeWatchlist = getActiveWatchlist();
+        const stock = activeWatchlist.find(s => s.code === code);
+        if (!stock) { debug((currentTab === 'etf' ? 'ETF' : '股票') + '不在自选: ' + code); return; }
+
+        setActiveSelected(code);
         saveState();
         renderWatchlist();
 
@@ -245,12 +334,12 @@
         document.getElementById('indicators').innerHTML = '<div class="loading"><div class="loading-spinner"></div>正在加载数据...</div>';
 
         const secid = stock.market + '.' + code;
-        debug('加载股票: ' + stock.name + ' (' + secid + ')');
+        debug('加载' + (currentTab === 'etf' ? 'ETF' : '股票') + ': ' + stock.name + ' (' + secid + ')');
 
         try {
             const [kline, quotes] = await Promise.all([
                 klineDataCache[code] || fetchKlineData(secid),
-                fetchRealtimeQuotes(watchlist.map(s => s.market + '.' + s.code).join(','))
+                fetchRealtimeQuotes(activeWatchlist.map(s => s.market + '.' + s.code).join(','))
             ]);
 
             if (kline.length > 0) {
@@ -259,7 +348,8 @@
 
             if (quotes.length > 0) {
                 quotes.forEach(q => {
-                    const s = watchlist.find(x => x.code === q.f12);
+                    const allLists = [...watchlist, ...etfWatchlist];
+                    const s = allLists.find(x => x.code === q.f12);
                     if (s) {
                         s.price = q.f2;
                         s.changePercent = q.f3;
@@ -289,12 +379,14 @@
     }
 
     async function refreshAll() {
-        if (!watchlist.length) return;
+        const activeWatchlist = getActiveWatchlist();
+        if (!activeWatchlist.length) return;
         klineDataCache = {};
-        if (selectedCode) {
-            await loadStock(selectedCode);
+        const activeSelected = getActiveSelected();
+        if (activeSelected) {
+            await loadStock(activeSelected);
         } else {
-            await loadStock(watchlist[0].code);
+            await loadStock(activeWatchlist[0].code);
         }
     }
 
@@ -303,14 +395,21 @@
     }
 
     function addStock(code) {
-        if (watchlist.find(s => s.code === code)) {
-            alert('该股票已在自选列表中');
+        const activeWatchlist = getActiveWatchlist();
+        const activeDB = getActiveDB();
+        
+        if (activeWatchlist.find(s => s.code === code)) {
+            alert(currentTab === 'etf' ? '该ETF已在自选列表中' : '该股票已在自选列表中');
             return;
         }
-        const stock = STOCK_DB.find(s => s.code === code);
+        const stock = activeDB.find(s => s.code === code);
         if (!stock) return;
 
-        watchlist.push({ code: stock.code, name: stock.name, market: stock.market });
+        if (currentTab === 'stock') {
+            watchlist.push({ code: stock.code, name: stock.name, market: stock.market });
+        } else {
+            etfWatchlist.push({ code: stock.code, name: stock.name, market: stock.market });
+        }
         document.getElementById('searchDropdown').style.display = 'none';
         document.getElementById('searchInput').value = '';
         saveState();
@@ -320,15 +419,24 @@
 
     function removeStock(code, e) {
         e.stopPropagation();
-        watchlist = watchlist.filter(s => s.code !== code);
-        delete klineDataCache[code];
-        if (selectedCode === code) {
-            selectedCode = watchlist.length ? watchlist[0].code : null;
+        if (currentTab === 'stock') {
+            watchlist = watchlist.filter(s => s.code !== code);
+            delete klineDataCache[code];
+            if (selectedCode === code) {
+                selectedCode = watchlist.length ? watchlist[0].code : null;
+            }
+        } else {
+            etfWatchlist = etfWatchlist.filter(s => s.code !== code);
+            delete klineDataCache[code];
+            if (selectedEtfCode === code) {
+                selectedEtfCode = etfWatchlist.length ? etfWatchlist[0].code : null;
+            }
         }
         saveState();
         renderWatchlist();
-        if (selectedCode) {
-            loadStock(selectedCode);
+        const activeSelected = getActiveSelected();
+        if (activeSelected) {
+            loadStock(activeSelected);
         } else {
             document.getElementById('dataSection').style.display = 'none';
         }
@@ -337,16 +445,20 @@
     // ==================== 渲染函数 ====================
     function renderWatchlist() {
         const container = document.getElementById('watchlist');
-        if (!watchlist.length) {
-            container.innerHTML = '<div class="empty-state"><div class="icon">🔍</div><div class="text">暂无自选股，请搜索添加</div></div>';
+        const activeWatchlist = getActiveWatchlist();
+        const activeSelected = getActiveSelected();
+        const emptyText = currentTab === 'etf' ? '暂无自选ETF，请搜索添加' : '暂无自选股，请搜索添加';
+        
+        if (!activeWatchlist.length) {
+            container.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><div class="text">${emptyText}</div></div>`;
             return;
         }
 
-        container.innerHTML = watchlist.map(s => {
+        container.innerHTML = activeWatchlist.map(s => {
             const change = s.change || 0;
             const changePercent = s.changePercent || 0;
             const cls = getChangeClass(change);
-            const isActive = selectedCode === s.code;
+            const isActive = activeSelected === s.code;
 
             return `
                 <div class="stock-card ${isActive ? 'active' : ''}" onclick="selectStock('${s.code}')">
@@ -376,9 +488,9 @@
 
         const lastIdx = kline.length - 1;
         const currentPrice = closes[lastIdx];
-        const stock = watchlist.find(s => s.code === code);
+        const allLists = [...watchlist, ...etfWatchlist];
+        const stock = allLists.find(s => s.code === code);
 
-        // 生成分析结论
         const analysis = generateAnalysis(currentPrice, ma5[lastIdx], ma10[lastIdx], ma20[lastIdx], ma60[lastIdx], macdData, kdjData, rsiData, bollData, lastIdx);
 
         document.getElementById('indicators').innerHTML = `
@@ -388,7 +500,7 @@
                 <div class="ind-row"><span class="ind-label">MA10</span><span class="ind-value">${formatNum(ma10[lastIdx])}</span></div>
                 <div class="ind-row"><span class="ind-label">MA20</span><span class="ind-value">${formatNum(ma20[lastIdx])}</span></div>
                 <div class="ind-row"><span class="ind-label">MA60</span><span class="ind-value">${formatNum(ma60[lastIdx])}</span></div>
-                <div class="ind-desc">均线反映股票平均成本。MA5/MA10为短期趋势，MA20为中期趋势，MA60为长期趋势。股价在均线上方为多头排列，下方为空头排列。</div>
+                <div class="ind-desc">均线反映平均成本。MA5/MA10为短期趋势，MA20为中期趋势，MA60为长期趋势。价格在均线上方为多头排列，下方为空头排列。</div>
             </div>
             <div class="ind-card">
                 <h3>MACD</h3>
@@ -410,39 +522,32 @@
                 <div class="ind-row"><span class="ind-label">布林上轨</span><span class="ind-value">${formatNum(bollData.upper[bollData.upper.length-1])}</span></div>
                 <div class="ind-row"><span class="ind-label">布林中轨</span><span class="ind-value">${formatNum(bollData.mid[bollData.mid.length-1])}</span></div>
                 <div class="ind-row"><span class="ind-label">布林下轨</span><span class="ind-value">${formatNum(bollData.lower[bollData.lower.length-1])}</span></div>
-                <div class="ind-desc">RSI衡量涨跌力度，70以上超买，30以下超卖。布林带反映波动范围，股价触及上轨可能回调，触及下轨可能反弹，中轨为支撑/压力位。</div>
+                <div class="ind-desc">RSI衡量涨跌力度，70以上超买，30以下超卖。布林带反映波动范围，价格触及上轨可能回调，触及下轨可能反弹，中轨为支撑/压力位。</div>
             </div>
         `;
 
-        // 移除旧的分析卡片
         const oldCard = document.getElementById('analysisCard');
         if (oldCard) oldCard.remove();
 
-        // 添加股票分析卡片到indicators-grid内部
+        const assetType = currentTab === 'etf' ? 'ETF' : '股票';
         document.getElementById('indicators').insertAdjacentHTML('beforeend', `
             <div class="analysis-card" id="analysisCard">
-                <h3>${stock ? stock.name : code} (${code}) 技术分析</h3>
+                <h3>${stock ? stock.name : code} (${code}) ${assetType}技术分析</h3>
                 <div class="analysis-section">
-                    <h4>当前股价</h4>
+                    <h4>当前价格</h4>
                     <p>现价 <strong class="${getChangeClass(currentPrice - kline[lastIdx-1].close)}">${formatNum(currentPrice)}</strong> 元，今日涨跌 <strong class="${getChangeClass(stock?.change || 0)}">${stock?.change >= 0 ? '+' : ''}${formatNum(stock?.changePercent)}%</strong></p>
                 </div>
                 ${analysis}
             </div>
         `);
 
-        // 销毁旧图表
         Object.values(charts).forEach(c => { if (c && !c.isDisposed()) c.dispose(); });
         charts = {};
 
-        // K线图
         renderKlineChart(dates, ohlc, ma5, ma10, ma20, ma60);
-        // MACD图
         renderMacdChart(dates, macdData);
-        // KDJ图
         renderKdjChart(dates, kdjData);
-        // RSI图
         renderRsiChart(dates, rsiData);
-        // 布林带图
         renderBollChart(dates, closes, bollData);
 
         debug('所有图表渲染完成');
@@ -892,7 +997,8 @@
         const input = document.getElementById('searchInput').value.trim();
         if (!input) return;
 
-        const results = STOCK_DB.filter(s =>
+        const activeDB = getActiveDB();
+        const results = activeDB.filter(s =>
             s.code.includes(input) || s.name.includes(input)
         );
 
@@ -901,10 +1007,11 @@
 
     function showSearchResults(results) {
         const dropdown = document.getElementById('searchDropdown');
+        const itemType = currentTab === 'etf' ? 'ETF' : '股票';
 
         if (results.length === 0) {
             dropdown.style.display = 'none';
-            alert('未找到匹配的股票');
+            alert('未找到匹配的' + itemType);
             return;
         }
 
@@ -926,7 +1033,8 @@
             return;
         }
 
-        const results = STOCK_DB.filter(s =>
+        const activeDB = getActiveDB();
+        const results = activeDB.filter(s =>
             s.code.includes(value) || s.name.includes(value)
         );
         showSearchResults(results);
@@ -953,16 +1061,28 @@
     // ==================== 初始化 ====================
     (function init() {
         debug('页面初始化开始');
+        
+        // 恢复Tab状态
+        if (currentTab === 'etf') {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelector('.tab[data-tab="etf"]').classList.add('active');
+            document.getElementById('searchInput').placeholder = '输入ETF代码或名称搜索...';
+            document.getElementById('watchlistTitle').textContent = '自选ETF';
+        }
+        
         renderWatchlist();
 
-        if (watchlist.length > 0) {
-            const target = selectedCode && watchlist.find(s => s.code === selectedCode)
-                ? selectedCode
-                : watchlist[0].code;
+        const activeWatchlist = getActiveWatchlist();
+        const activeSelected = getActiveSelected();
+
+        if (activeWatchlist.length > 0) {
+            const target = activeSelected && activeWatchlist.find(s => s.code === activeSelected)
+                ? activeSelected
+                : activeWatchlist[0].code;
             debug('默认加载: ' + target);
             loadStock(target);
         } else {
-            debug('自选股列表为空');
+            debug('自选列表为空');
         }
     })();
     </script>
