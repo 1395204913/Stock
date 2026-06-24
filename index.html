@@ -74,8 +74,13 @@
         .tag-down { background: rgba(46,213,115,0.2); color: #2ed573; }
         .tag-neutral { background: rgba(254,202,87,0.2); color: #feca57; }
         .chart-container { background: #1a1a2e; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
-        .chart-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .chart-title { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
         .chart-title::before { content: ''; width: 4px; height: 18px; background: #ff4757; border-radius: 2px; }
+        .period-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+        .period-btn { padding: 6px 14px; border: 1px solid #2a2a3e; border-radius: 6px; background: transparent; color: #888; cursor: pointer; font-size: 12px; transition: all 0.2s; }
+        .period-btn:hover { border-color: #ff4757; color: #ff4757; }
+        .period-btn.active { background: #ff4757; border-color: #ff4757; color: #fff; }
         .chart-wrapper { background: #0f0f1a; border-radius: 8px; padding: 10px; }
         .loading { text-align: center; padding: 60px 20px; color: #888; }
         .loading-spinner { width: 40px; height: 40px; border: 3px solid #2a2a3e; border-top-color: #ff4757; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
@@ -134,7 +139,19 @@
         <div class="data-section" id="dataSection">
             <div class="indicators-grid" id="indicators"></div>
             <div class="chart-container">
-                <div class="chart-title">日K线 & 均线</div>
+                <div class="chart-header">
+                    <div class="chart-title">日K线 & 均线</div>
+                    <div class="period-btns">
+                        <button class="period-btn" data-period="5" onclick="setChartPeriod(5)">5日</button>
+                        <button class="period-btn" data-period="10" onclick="setChartPeriod(10)">10日</button>
+                        <button class="period-btn" data-period="30" onclick="setChartPeriod(30)">1月</button>
+                        <button class="period-btn" data-period="60" onclick="setChartPeriod(60)">2月</button>
+                        <button class="period-btn" data-period="90" onclick="setChartPeriod(90)">3月</button>
+                        <button class="period-btn active" data-period="180" onclick="setChartPeriod(180)">半年</button>
+                        <button class="period-btn" data-period="365" onclick="setChartPeriod(365)">1年</button>
+                        <button class="period-btn" data-period="0" onclick="setChartPeriod(0)">全部</button>
+                    </div>
+                </div>
                 <div class="chart-wrapper"><div id="chartKline" style="height:500px"></div></div>
             </div>
             <div class="chart-container">
@@ -219,6 +236,7 @@
     let selectedEtfCode = localStorage.getItem('etf_selected') || null;
     let charts = {};
     let klineDataCache = {};
+    let currentPeriod = 180; // 默认半年
 
     function getActiveDB() { return currentTab === 'stock' ? STOCK_DB : ETF_DB; }
     function getActiveWatchlist() { return currentTab === 'stock' ? watchlist : etfWatchlist; }
@@ -291,6 +309,46 @@
     }
 
     // ==================== 核心逻辑 ====================
+    function setChartPeriod(days) {
+        currentPeriod = days;
+        localStorage.setItem('chart_period', days);
+        
+        document.querySelectorAll('.period-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelector(`.period-btn[data-period="${days}"]`).classList.add('active');
+        
+        updateAllChartsZoom();
+    }
+
+    function updateAllChartsZoom() {
+        const totalLen = Object.values(charts).find(c => c && !c.isDisposed())?.getOption()?.xAxis?.[0]?.data?.length || 0;
+        if (totalLen === 0) return;
+
+        let startPercent = 0;
+        if (currentPeriod === 0) {
+            startPercent = 0;
+        } else if (currentPeriod >= totalLen) {
+            startPercent = 0;
+        } else {
+            startPercent = ((totalLen - currentPeriod) / totalLen * 100).toFixed(1);
+        }
+
+        Object.values(charts).forEach(chart => {
+            if (chart && !chart.isDisposed()) {
+                chart.dispatchAction({
+                    type: 'dataZoom',
+                    start: parseFloat(startPercent),
+                    end: 100
+                });
+            }
+        });
+    }
+
+    function getPeriodConfig(totalDays) {
+        if (currentPeriod === 0) return { start: 0, end: 100 };
+        if (currentPeriod >= totalDays) return { start: 0, end: 100 };
+        const start = ((totalDays - currentPeriod) / totalDays * 100).toFixed(1);
+        return { start: parseFloat(start), end: 100 };
+    }
     function switchTab(tab) {
         currentTab = tab;
         saveState();
@@ -553,7 +611,8 @@
         debug('所有图表渲染完成');
     }
 
-    function getChartBaseOption() {
+    function getChartBaseOption(dataLength) {
+        const periodCfg = getPeriodConfig(dataLength || 250);
         return {
             backgroundColor: 'transparent',
             animation: false,
@@ -586,11 +645,11 @@
                 axisLine: { show: false }
             },
             dataZoom: [
-                { type: 'inside', start: 0, end: 100 },
+                { type: 'inside', start: periodCfg.start, end: periodCfg.end },
                 {
                     type: 'slider',
-                    start: 0,
-                    end: 100,
+                    start: periodCfg.start,
+                    end: periodCfg.end,
                     height: 25,
                     bottom: 5,
                     borderColor: '#333',
@@ -610,7 +669,7 @@
         const chart = echarts.init(document.getElementById('chartKline'));
         charts.kline = chart;
 
-        const option = getChartBaseOption();
+        const option = getChartBaseOption(dates.length);
         option.xAxis.data = dates;
         option.legend = {
             data: ['K线', 'MA5', 'MA10', 'MA20', 'MA60'],
@@ -646,7 +705,7 @@
         const chart = echarts.init(document.getElementById('chartMacd'));
         charts.macd = chart;
 
-        const option = getChartBaseOption();
+        const option = getChartBaseOption(dates.length);
         option.xAxis.data = dates;
         option.legend = {
             data: ['DIF', 'DEA', 'MACD'],
@@ -677,7 +736,7 @@
         const chart = echarts.init(document.getElementById('chartKdj'));
         charts.kdj = chart;
 
-        const option = getChartBaseOption();
+        const option = getChartBaseOption(dates.length);
         option.xAxis.data = dates;
         option.yAxis.min = 0;
         option.yAxis.max = 100;
@@ -700,7 +759,7 @@
         const chart = echarts.init(document.getElementById('chartRsi'));
         charts.rsi = chart;
 
-        const option = getChartBaseOption();
+        const option = getChartBaseOption(dates.length);
         option.xAxis.data = dates;
         option.yAxis.min = 0;
         option.yAxis.max = 100;
@@ -736,7 +795,7 @@
         const chart = echarts.init(document.getElementById('chartBoll'));
         charts.boll = chart;
 
-        const option = getChartBaseOption();
+        const option = getChartBaseOption(dates.length);
         option.xAxis.data = dates;
         option.legend = {
             data: ['价格', '上轨', '中轨', '下轨'],
@@ -1061,6 +1120,15 @@
     // ==================== 初始化 ====================
     (function init() {
         debug('页面初始化开始');
+        
+        // 恢复周期设置
+        const savedPeriod = localStorage.getItem('chart_period');
+        if (savedPeriod) {
+            currentPeriod = parseInt(savedPeriod);
+            document.querySelectorAll('.period-btn').forEach(btn => btn.classList.remove('active'));
+            const targetBtn = document.querySelector(`.period-btn[data-period="${currentPeriod}"]`);
+            if (targetBtn) targetBtn.classList.add('active');
+        }
         
         // 恢复Tab状态
         if (currentTab === 'etf') {
