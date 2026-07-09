@@ -544,6 +544,11 @@
         const rsiData = calcRSI(closes, 6);
         const bollData = calcBoll(closes, 20);
 
+        // 主力成本计算
+        const mainCost20 = calcMainCost(kline, 20);
+        const mainCost60 = calcMainCost(kline, 60);
+        const mainCost120 = calcMainCost(kline, 120);
+
         const lastIdx = kline.length - 1;
         const currentPrice = closes[lastIdx];
         const allLists = [...watchlist, ...etfWatchlist];
@@ -552,6 +557,14 @@
         const analysis = generateAnalysis(currentPrice, ma5[lastIdx], ma10[lastIdx], ma20[lastIdx], ma60[lastIdx], macdData, kdjData, rsiData, bollData, lastIdx);
 
         document.getElementById('indicators').innerHTML = `
+            <div class="ind-card">
+                <h3>主力成本 (VWAP)</h3>
+                <div class="ind-row"><span class="ind-label">20日成本</span><span class="ind-value">${mainCost20 ? formatNum(mainCost20) : '--'}</span></div>
+                <div class="ind-row"><span class="ind-label">60日成本</span><span class="ind-value">${mainCost60 ? formatNum(mainCost60) : '--'}</span></div>
+                <div class="ind-row"><span class="ind-label">120日成本</span><span class="ind-value">${mainCost120 ? formatNum(mainCost120) : '--'}</span></div>
+                ${mainCost20 ? `<div class="ind-row"><span class="ind-label">当前价vs20日成本</span><span class="ind-value ${getChangeClass(currentPrice - mainCost20)}">${currentPrice > mainCost20 ? '+' : ''}${formatNum((currentPrice - mainCost20) / mainCost20 * 100)}%</span></div>` : ''}
+                <div class="ind-desc">主力成本基于成交量加权平均价格(VWAP)计算。价格高于主力成本表示主力获利，低于主力成本表示主力被套。</div>
+            </div>
             <div class="ind-card">
                 <h3>均线指标 (MA)</h3>
                 <div class="ind-row"><span class="ind-label">MA5</span><span class="ind-value">${formatNum(ma5[lastIdx])}</span></div>
@@ -580,7 +593,8 @@
                 <div class="ind-row"><span class="ind-label">布林上轨</span><span class="ind-value">${formatNum(bollData.upper[bollData.upper.length-1])}</span></div>
                 <div class="ind-row"><span class="ind-label">布林中轨</span><span class="ind-value">${formatNum(bollData.mid[bollData.mid.length-1])}</span></div>
                 <div class="ind-row"><span class="ind-label">布林下轨</span><span class="ind-value">${formatNum(bollData.lower[bollData.lower.length-1])}</span></div>
-                <div class="ind-desc">RSI衡量涨跌力度，70以上超买，30以下超卖。布林带反映波动范围，价格触及上轨可能回调，触及下轨可能反弹，中轨为支撑/压力位。</div>
+                <div class="ind-row"><span class="ind-label">波动率(BandWidth)</span><span class="ind-value">${formatNum(bollData.bandwidth[bollData.bandwidth.length-1])}%</span></div>
+                <div class="ind-desc">RSI衡量涨跌力度，70以上超买，30以下超卖。布林带反映波动范围，价格触及上轨可能回调，触及下轨可能反弹，中轨为支撑/压力位。波动率(BandWidth)由(上轨-下轨)/中轨计算，值越大波动越剧烈，通常>10%为高波动，<5%为低波动(可能酝酿变盘)。</div>
             </div>
         `;
 
@@ -907,7 +921,7 @@
     }
 
     function calcBoll(closes, period) {
-        const upper = [], mid = [], lower = [];
+        const upper = [], mid = [], lower = [], bandwidth = [];
 
         for (let i = 0; i < closes.length; i++) {
             if (i < period - 1) continue;
@@ -927,9 +941,25 @@
             mid.push(+ma.toFixed(2));
             upper.push(+(ma + 2 * std).toFixed(2));
             lower.push(+(ma - 2 * std).toFixed(2));
+            // 布林带宽度 = (上轨 - 下轨) / 中轨 * 100%
+            bandwidth.push(+(((ma + 2 * std - (ma - 2 * std)) / ma) * 100).toFixed(2));
         }
 
-        return { upper, mid, lower };
+        return { upper, mid, lower, bandwidth };
+    }
+
+    // 主力成本计算（成交量加权平均价格VWAP）
+    function calcMainCost(kline, period) {
+        if (kline.length < period) return null;
+        const slice = kline.slice(-period);
+        let totalAmount = 0;
+        let totalVolume = 0;
+        slice.forEach(k => {
+            const avgPrice = (k.open + k.close + k.high + k.low) / 4;
+            totalAmount += avgPrice * k.volume;
+            totalVolume += k.volume;
+        });
+        return totalVolume > 0 ? +(totalAmount / totalVolume).toFixed(2) : null;
     }
 
     // ==================== 技术分析生成 ====================
@@ -1005,16 +1035,23 @@
         const upper = boll.upper[boll.upper.length - 1];
         const mid = boll.mid[boll.mid.length - 1];
         const lower = boll.lower[boll.lower.length - 1];
+        const bw = boll.bandwidth[boll.bandwidth.length - 1];
         const bollAnalysis = [];
         if (price >= upper) bollAnalysis.push('<span class="analysis-tag tag-up">股价触及布林上轨</span>短期超买，注意回调');
         else if (price <= lower) bollAnalysis.push('<span class="analysis-tag tag-down">股价触及布林下轨</span>短期超卖，关注反弹');
         else if (price > mid) bollAnalysis.push('<span class="analysis-tag tag-up">股价在中轨上方</span>偏强势');
         else bollAnalysis.push('<span class="analysis-tag tag-down">股价在中轨下方</span>偏弱势');
 
+        const bwAnalysis = [];
+        if (bw > 10) bwAnalysis.push('<span class="analysis-tag tag-up">波动率较高</span>市场活跃，注意风险');
+        else if (bw < 5) bwAnalysis.push('<span class="analysis-tag tag-neutral">波动率收窄</span>可能酝酿变盘，关注突破方向');
+        else bwAnalysis.push('<span class="analysis-tag tag-neutral">波动率适中</span>市场相对平稳');
+
         html += `
             <div class="analysis-section">
                 <h4>布林带分析</h4>
                 <p>${bollAnalysis.join('')}。上轨: ${formatNum(upper)}，中轨: ${formatNum(mid)}，下轨: ${formatNum(lower)}。</p>
+                <p>${bwAnalysis.join('')}。当前波动率: ${formatNum(bw)}%。</p>
             </div>
         `;
 
@@ -1051,31 +1088,76 @@
         return html;
     }
 
-    // ==================== 搜索功能 ====================
-    function doSearch() {
+    // ==================== 搜索功能（JSONP） ====================
+    let searchCallbackId = 0;
+
+    function searchByJSONP(keyword) {
+        return new Promise((resolve, reject) => {
+            const callbackName = '__search_cb_' + (++searchCallbackId);
+            const script = document.createElement('script');
+            const timeout = setTimeout(() => {
+                cleanup();
+                reject(new Error('搜索超时'));
+            }, 5000);
+
+            function cleanup() {
+                clearTimeout(timeout);
+                delete window[callbackName];
+                if (script.parentNode) script.parentNode.removeChild(script);
+            }
+
+            window[callbackName] = function(data) {
+                cleanup();
+                resolve(data);
+            };
+
+            script.src = `https://searchapi.eastmoney.com/api/suggest/get?input=${encodeURIComponent(keyword)}&type=14&token=D43BF722C8E33BDC906FB84D85E326E8&count=20&cb=${callbackName}`;
+            script.onerror = function() {
+                cleanup();
+                reject(new Error('网络错误'));
+            };
+            document.head.appendChild(script);
+        });
+    }
+
+    async function doSearch() {
         const input = document.getElementById('searchInput').value.trim();
         if (!input) return;
 
-        const activeDB = getActiveDB();
-        const results = activeDB.filter(s =>
-            s.code.includes(input) || s.name.includes(input)
-        );
+        const dropdown = document.getElementById('searchDropdown');
+        dropdown.innerHTML = '<div class="search-item" style="justify-content:center;color:#888;">搜索中...</div>';
+        dropdown.style.display = 'block';
 
-        showSearchResults(results);
+        try {
+            const json = await searchByJSONP(input);
+            const data = json.QuotationCodeTable?.Data || [];
+            const results = data.map(item => {
+                const code = item.Code;
+                let market = '0';
+                if (item.MktNum === '1' || code.startsWith('6') || code.startsWith('688') || code.startsWith('5')) {
+                    market = '1';
+                }
+                return { code, name: item.Name, market };
+            });
+            showSearchResults(results);
+        } catch (e) {
+            debug('搜索失败: ' + e.message);
+            dropdown.style.display = 'none';
+            alert('搜索失败: ' + e.message);
+        }
     }
 
     function showSearchResults(results) {
         const dropdown = document.getElementById('searchDropdown');
-        const itemType = currentTab === 'etf' ? 'ETF' : '股票';
 
         if (results.length === 0) {
             dropdown.style.display = 'none';
-            alert('未找到匹配的' + itemType);
+            alert('未找到匹配的结果');
             return;
         }
 
         dropdown.innerHTML = results.map(s => `
-            <div class="search-item" onclick="addStock('${s.code}')">
+            <div class="search-item" onclick="addStockDirect('${s.code}','${s.name}','${s.market}')">
                 <span class="code">${s.code}</span>
                 <span class="name">${s.name}</span>
                 <span class="market">${s.market === '1' ? '沪' : '深'}</span>
@@ -1084,19 +1166,50 @@
         dropdown.style.display = 'block';
     }
 
+    function addStockDirect(code, name, market) {
+        const activeWatchlist = getActiveWatchlist();
+        if (activeWatchlist.find(s => s.code === code)) {
+            alert('该' + (currentTab === 'etf' ? 'ETF' : '股票') + '已在自选列表中');
+            return;
+        }
+        if (currentTab === 'stock') {
+            watchlist.push({ code, name, market });
+        } else {
+            etfWatchlist.push({ code, name, market });
+        }
+        document.getElementById('searchDropdown').style.display = 'none';
+        document.getElementById('searchInput').value = '';
+        saveState();
+        renderWatchlist();
+        loadStock(code);
+    }
+
     // ==================== 事件监听 ====================
+    let searchTimer = null;
     document.getElementById('searchInput').addEventListener('input', function(e) {
         const value = e.target.value.trim();
         if (!value) {
             document.getElementById('searchDropdown').style.display = 'none';
             return;
         }
-
-        const activeDB = getActiveDB();
-        const results = activeDB.filter(s =>
-            s.code.includes(value) || s.name.includes(value)
-        );
-        showSearchResults(results);
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(async () => {
+            try {
+                const json = await searchByJSONP(value);
+                const data = json.QuotationCodeTable?.Data || [];
+                const results = data.map(item => {
+                    const code = item.Code;
+                    let market = '0';
+                    if (item.MktNum === '1' || code.startsWith('6') || code.startsWith('688') || code.startsWith('5')) {
+                        market = '1';
+                    }
+                    return { code, name: item.Name, market };
+                });
+                showSearchResults(results);
+            } catch (err) {
+                debug('联想搜索失败: ' + err.message);
+            }
+        }, 300);
     });
 
     document.getElementById('searchInput').addEventListener('keypress', function(e) {

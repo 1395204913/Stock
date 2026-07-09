@@ -1,0 +1,24 @@
+{
+  "name": "stock-etf-analyzer",
+  "version": "1.0.0",
+  "description": "股票 & ETF 分析工具",
+  "main": "index.html",
+  "scripts": {
+    "start": "nw .",
+    "build": "nwbuild --platforms win64 --buildDir dist ."
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "nw": "^0.83.0",
+    "nw-builder": "^4.0.0"
+  },
+  "window": {
+    "title": "股票 & ETF 分析工具",
+    "width": 1400,
+    "height": 900,
+    "min_width": 1000,
+    "min_height": 700,
+    "position": "center"
+  }
+}
