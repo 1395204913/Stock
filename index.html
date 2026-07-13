@@ -262,8 +262,8 @@
                     <h4>筛选说明</h4>
                     <div class="ind-desc" style="margin-top:0;padding-top:0;border:none;">
                         <p style="margin-bottom:8px;"><strong>筛选范围：</strong></p>
-                        <p style="margin-bottom:4px;">• 股票：全部A股（约5000只）</p>
-                        <p style="margin-bottom:4px;">• ETF：全部场内基金（约2000只）</p>
+                        <p style="margin-bottom:4px;">• 股票：沪深主板（已排除科创板和创业板）</p>
+                        <p style="margin-bottom:4px;">• ETF：全部场内基金</p>
                         <p style="margin-bottom:8px;"><strong>组合筛选逻辑：</strong></p>
                         <p style="margin-bottom:4px;">• 波动率条件：可多选（满足任一即符合）</p>
                         <p style="margin-bottom:4px;">• 布林带位置：可多选（满足任一即符合）</p>
@@ -349,7 +349,6 @@
         {code:'000858',name:'五粮液',market:'0'},
         {code:'000333',name:'美的集团',market:'0'},
         {code:'600276',name:'恒瑞医药',market:'1'},
-        {code:'300750',name:'宁德时代',market:'0'},
         {code:'002594',name:'比亚迪',market:'0'},
         {code:'600900',name:'长江电力',market:'1'},
         {code:'601398',name:'工商银行',market:'1'},
@@ -357,8 +356,7 @@
         {code:'002415',name:'海康威视',market:'0'},
         {code:'600887',name:'伊利股份',market:'1'},
         {code:'000568',name:'泸州老窖',market:'0'},
-        {code:'601888',name:'中国中免',market:'1'},
-        {code:'300059',name:'东方财富',market:'0'}
+        {code:'601888',name:'中国中免',market:'1'}
     ];
 
     const ETF_DB = [
@@ -1291,10 +1289,12 @@
         document.getElementById('filterResults').style.display = 'none';
     }
 
-    // 获取全部A股列表
+    // 获取全部A股列表（排除科创板和创业板）
     async function fetchAllStocks() {
-        const url = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=5000&po=1&np=1&ut=bd1d9ddb04089700cf9c27f6f7426281&fltt=2&invt=2&fid=f3&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048&fields=f12,f14,f13';
-        debug('获取全部A股列表: ' + url);
+        // 沪市主板: m:1+t:2, 深市主板: m:0+t:6, 深市中小板: m:0+t:80
+        // 排除科创板: m:1+t:23, 创业板: m:0+t:81+s:2048
+        const url = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=5000&po=1&np=1&ut=bd1d9ddb04089700cf9c27f6f7426281&fltt=2&invt=2&fid=f3&fs=m:0+t:6,m:0+t:80,m:1+t:2&fields=f12,f14,f13';
+        debug('获取全部A股列表（排除科创板和创业板）: ' + url);
         try {
             const resp = await fetch(url);
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -1316,7 +1316,7 @@
 
     // 获取全部ETF列表
     async function fetchAllETFs() {
-        const url = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=2000&po=1&np=1&ut=bd1d9ddb04089700cf9c27f6f7426281&fltt=2&invt=2&fid=f3&fs=m:0+t:6+f:!2,m:1+t:2+f:!2,m:0+t:81+f:!2,m:1+t:23+f:!2&fields=f12,f14,f13';
+        const url = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=2000&po=1&np=1&ut=bd1d9ddb04089700cf9c27f6f7426281&fltt=2&invt=2&fid=f3&fs=m:0+t:5,m:1+t:5&fields=f12,f14,f13';
         debug('获取全部ETF列表: ' + url);
         try {
             const resp = await fetch(url);
