@@ -257,6 +257,60 @@
                     </div>
                 </div>
 
+                <!-- 买入信号筛选 -->
+                <div class="filter-group">
+                    <h4 style="color:#2ed573;">买入信号</h4>
+                    <div class="filter-options">
+                        <div class="filter-option" data-filter="buySignal" data-value="trend_up" onclick="toggleFilter(this)">
+                            <div class="filter-checkbox"></div>
+                            <div class="filter-label">上升趋势</div>
+                            <div class="filter-desc">股价站上60日线，均线多头排列</div>
+                        </div>
+                        <div class="filter-option" data-filter="buySignal" data-value="pullback_support" onclick="toggleFilter(this)">
+                            <div class="filter-checkbox"></div>
+                            <div class="filter-label">回调支撑</div>
+                            <div class="filter-desc">股价回调至20日均线附近(±3%)</div>
+                        </div>
+                        <div class="filter-option" data-filter="buySignal" data-value="volume_shrink" onclick="toggleFilter(this)">
+                            <div class="filter-checkbox"></div>
+                            <div class="filter-label">缩量回调</div>
+                            <div class="filter-desc">近5日成交量低于前期均量</div>
+                        </div>
+                        <div class="filter-option" data-filter="buySignal" data-value="macd_golden" onclick="toggleFilter(this)">
+                            <div class="filter-checkbox"></div>
+                            <div class="filter-label">MACD金叉</div>
+                            <div class="filter-desc">DIF上穿DEA</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 卖出信号筛选 -->
+                <div class="filter-group">
+                    <h4 style="color:#ff4757;">卖出信号</h4>
+                    <div class="filter-options">
+                        <div class="filter-option" data-filter="sellSignal" data-value="trend_down" onclick="toggleFilter(this)">
+                            <div class="filter-checkbox"></div>
+                            <div class="filter-label">下降趋势</div>
+                            <div class="filter-desc">股价跌破60日线，均线空头排列</div>
+                        </div>
+                        <div class="filter-option" data-filter="sellSignal" data-value="resistance" onclick="toggleFilter(this)">
+                            <div class="filter-checkbox"></div>
+                            <div class="filter-label">压力位反弹</div>
+                            <div class="filter-desc">股价反弹至60日均线附近(±3%)</div>
+                        </div>
+                        <div class="filter-option" data-filter="sellSignal" data-value="volume_high_stagnate" onclick="toggleFilter(this)">
+                            <div class="filter-checkbox"></div>
+                            <div class="filter-label">放量滞涨</div>
+                            <div class="filter-desc">成交量放大但价格未上涨</div>
+                        </div>
+                        <div class="filter-option" data-filter="sellSignal" data-value="macd_dead" onclick="toggleFilter(this)">
+                            <div class="filter-checkbox"></div>
+                            <div class="filter-label">MACD死叉</div>
+                            <div class="filter-desc">DIF下穿DEA</div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 组合条件说明 -->
                 <div class="filter-group">
                     <h4>筛选说明</h4>
@@ -265,12 +319,19 @@
                         <p style="margin-bottom:4px;">• 股票：沪深主板（已排除科创板和创业板）</p>
                         <p style="margin-bottom:4px;">• ETF：全部场内基金</p>
                         <p style="margin-bottom:8px;"><strong>组合筛选逻辑：</strong></p>
-                        <p style="margin-bottom:4px;">• 波动率条件：可多选（满足任一即符合）</p>
-                        <p style="margin-bottom:4px;">• 布林带位置：可多选（满足任一即符合）</p>
-                        <p style="margin-bottom:4px;">• 两类条件之间为"且"关系</p>
-                        <p style="margin-bottom:4px;">• 例如：选择"高波动" + "上轨之上"</p>
-                        <p style="margin-bottom:4px;">• 筛选结果为：高波动 且 在上轨之上的股票</p>
-                        <p style="margin-top:8px;color:#feca57;">注意：筛选需要较长时间，请耐心等待</p>
+                        <p style="margin-bottom:4px;">• 同类条件：可多选（满足任一即符合）</p>
+                        <p style="margin-bottom:4px;">• 不同类条件：为"且"关系</p>
+                        <p style="margin-bottom:8px;"><strong>买入信号：</strong></p>
+                        <p style="margin-bottom:4px;">• 上升趋势：股价>60日线，MA5>MA10>MA20</p>
+                        <p style="margin-bottom:4px;">• 回调支撑：股价在20日线附近(±3%)</p>
+                        <p style="margin-bottom:4px;">• 缩量回调：近5日量<前期均量80%</p>
+                        <p style="margin-bottom:4px;">• MACD金叉：DIF上穿DEA</p>
+                        <p style="margin-bottom:8px;"><strong>卖出信号：</strong></p>
+                        <p style="margin-bottom:4px;">• 下降趋势：股价<60日线，MA5<MA10<MA20</p>
+                        <p style="margin-bottom:4px;">• 压力位：股价在60日线附近(±3%)</p>
+                        <p style="margin-bottom:4px;">• 放量滞涨：量放大130%但价格变化<2%</p>
+                        <p style="margin-bottom:4px;">• MACD死叉：DIF下穿DEA</p>
+                        <p style="margin-top:8px;color:#feca57;">注意：买入和卖出信号不能同时选择</p>
                     </div>
                 </div>
             </div>
@@ -1254,7 +1315,9 @@
     // ==================== 股票筛选功能 ====================
     let filterState = {
         volatility: [],
-        bollPosition: []
+        bollPosition: [],
+        buySignal: [],
+        sellSignal: []
     };
 
     function toggleFilter(element) {
@@ -1279,7 +1342,7 @@
     }
 
     function resetFilters() {
-        filterState = { volatility: [], bollPosition: [] };
+        filterState = { volatility: [], bollPosition: [], buySignal: [], sellSignal: [] };
         document.querySelectorAll('.filter-option').forEach(opt => {
             opt.classList.remove('selected');
         });
@@ -1340,9 +1403,16 @@
     async function applyFilters() {
         const hasVolatility = filterState.volatility.length > 0;
         const hasBollPosition = filterState.bollPosition.length > 0;
+        const hasBuySignal = filterState.buySignal.length > 0;
+        const hasSellSignal = filterState.sellSignal.length > 0;
         
-        if (!hasVolatility && !hasBollPosition) {
+        if (!hasVolatility && !hasBollPosition && !hasBuySignal && !hasSellSignal) {
             alert('请至少选择一个筛选条件');
+            return;
+        }
+        
+        if (hasBuySignal && hasSellSignal) {
+            alert('买入信号和卖出信号不能同时选择');
             return;
         }
         
@@ -1389,9 +1459,10 @@
                         }
                     }
                     
-                    if (!kline || kline.length < 20) return null;
+                    if (!kline || kline.length < 60) return null;
                     
                     const closes = kline.map(d => d.close);
+                    const volumes = kline.map(d => d.volume);
                     const bollData = calcBoll(closes, 20);
                     const lastIdx = closes.length - 1;
                     const currentPrice = closes[lastIdx];
@@ -1400,6 +1471,13 @@
                     const mid = bollData.mid[bollData.mid.length - 1];
                     const lower = bollData.lower[bollData.lower.length - 1];
                     const bandwidth = bollData.bandwidth[bollData.bandwidth.length - 1];
+                    
+                    // 计算均线
+                    const ma5 = calcMA(closes, 5);
+                    const ma10 = calcMA(closes, 10);
+                    const ma20 = calcMA(closes, 20);
+                    const ma60 = calcMA(closes, 60);
+                    const macdData = calcMACD(closes);
                     
                     // 检查波动率条件
                     let volatilityMatch = false;
@@ -1432,7 +1510,78 @@
                         bollPositionMatch = true;
                     }
                     
-                    if (volatilityMatch && bollPositionMatch) {
+                    // 检查买入信号
+                    let buySignalMatch = false;
+                    let buySignals = [];
+                    if (hasBuySignal) {
+                        for (const signal of filterState.buySignal) {
+                            if (signal === 'trend_up' && currentPrice > ma60[lastIdx] && ma5[lastIdx] > ma10[lastIdx] && ma10[lastIdx] > ma20[lastIdx]) {
+                                buySignalMatch = true;
+                                buySignals.push('上升趋势');
+                            }
+                            if (signal === 'pullback_support') {
+                                const dist = Math.abs(currentPrice - ma20[lastIdx]) / ma20[lastIdx] * 100;
+                                if (dist <= 3 && currentPrice >= ma20[lastIdx] * 0.97) {
+                                    buySignalMatch = true;
+                                    buySignals.push('回调支撑');
+                                }
+                            }
+                            if (signal === 'volume_shrink') {
+                                const recent5Vol = volumes.slice(-5).reduce((a, b) => a + b, 0) / 5;
+                                const prev10Vol = volumes.slice(-15, -5).reduce((a, b) => a + b, 0) / 10;
+                                if (recent5Vol < prev10Vol * 0.8) {
+                                    buySignalMatch = true;
+                                    buySignals.push('缩量回调');
+                                }
+                            }
+                            if (signal === 'macd_golden') {
+                                if (macdData.dif[lastIdx] > macdData.dea[lastIdx] && macdData.dif[lastIdx - 1] <= macdData.dea[lastIdx - 1]) {
+                                    buySignalMatch = true;
+                                    buySignals.push('MACD金叉');
+                                }
+                            }
+                        }
+                    } else {
+                        buySignalMatch = true;
+                    }
+                    
+                    // 检查卖出信号
+                    let sellSignalMatch = false;
+                    let sellSignals = [];
+                    if (hasSellSignal) {
+                        for (const signal of filterState.sellSignal) {
+                            if (signal === 'trend_down' && currentPrice < ma60[lastIdx] && ma5[lastIdx] < ma10[lastIdx] && ma10[lastIdx] < ma20[lastIdx]) {
+                                sellSignalMatch = true;
+                                sellSignals.push('下降趋势');
+                            }
+                            if (signal === 'resistance') {
+                                const dist = Math.abs(currentPrice - ma60[lastIdx]) / ma60[lastIdx] * 100;
+                                if (dist <= 3 && currentPrice <= ma60[lastIdx] * 1.03) {
+                                    sellSignalMatch = true;
+                                    sellSignals.push('压力位');
+                                }
+                            }
+                            if (signal === 'volume_high_stagnate') {
+                                const recent5Vol = volumes.slice(-5).reduce((a, b) => a + b, 0) / 5;
+                                const prev10Vol = volumes.slice(-15, -5).reduce((a, b) => a + b, 0) / 10;
+                                const priceChange = (closes[lastIdx] - closes[lastIdx - 5]) / closes[lastIdx - 5] * 100;
+                                if (recent5Vol > prev10Vol * 1.3 && Math.abs(priceChange) < 2) {
+                                    sellSignalMatch = true;
+                                    sellSignals.push('放量滞涨');
+                                }
+                            }
+                            if (signal === 'macd_dead') {
+                                if (macdData.dif[lastIdx] < macdData.dea[lastIdx] && macdData.dif[lastIdx - 1] >= macdData.dea[lastIdx - 1]) {
+                                    sellSignalMatch = true;
+                                    sellSignals.push('MACD死叉');
+                                }
+                            }
+                        }
+                    } else {
+                        sellSignalMatch = true;
+                    }
+                    
+                    if (volatilityMatch && bollPositionMatch && buySignalMatch && sellSignalMatch) {
                         const position = getBollPosition(currentPrice, upper, mid, lower);
                         return {
                             code: stock.code,
@@ -1443,7 +1592,9 @@
                             upper: upper,
                             mid: mid,
                             lower: lower,
-                            position: position
+                            position: position,
+                            buySignals: buySignals,
+                            sellSignals: sellSignals
                         };
                     }
                     return null;
@@ -1481,42 +1632,55 @@
             return;
         }
         
-        // 按波动率排序
+        const hasBuySignals = results.some(r => r.buySignals && r.buySignals.length > 0);
+        const hasSellSignals = results.some(r => r.sellSignals && r.sellSignals.length > 0);
+        
         results.sort((a, b) => b.bandwidth - a.bandwidth);
+        
+        let tableHeader = `
+            <tr>
+                <th>代码</th>
+                <th>名称</th>
+                <th>现价</th>
+                <th>波动率</th>
+                <th>波动状态</th>
+                <th>布林带位置</th>
+                <th>上轨</th>
+                <th>中轨</th>
+                <th>下轨</th>
+                ${hasBuySignals ? '<th style="color:#2ed573;">买入信号</th>' : ''}
+                ${hasSellSignals ? '<th style="color:#ff4757;">卖出信号</th>' : ''}
+            </tr>
+        `;
+        
+        let tableRows = results.map(r => {
+            const volTag = getVolatilityTag(r.bandwidth);
+            const buySignalHtml = hasBuySignals ? 
+                `<td>${r.buySignals && r.buySignals.length > 0 ? r.buySignals.map(s => `<span class="filter-tag tag-low-vol">${s}</span>`).join('') : '-'}</td>` : '';
+            const sellSignalHtml = hasSellSignals ? 
+                `<td>${r.sellSignals && r.sellSignals.length > 0 ? r.sellSignals.map(s => `<span class="filter-tag tag-high-vol">${s}</span>`).join('') : '-'}</td>` : '';
+            
+            return `
+                <tr onclick="addStockFromFilter('${r.code}', '${r.name}', '${r.market}')">
+                    <td class="code">${r.code}</td>
+                    <td class="name">${r.name}</td>
+                    <td class="indicator">${formatNum(r.price)}</td>
+                    <td class="indicator">${formatNum(r.bandwidth)}%</td>
+                    <td><span class="filter-tag ${volTag.class}">${volTag.text}</span></td>
+                    <td><span class="filter-tag ${r.position.class}">${r.position.text}</span></td>
+                    <td class="indicator">${formatNum(r.upper)}</td>
+                    <td class="indicator">${formatNum(r.mid)}</td>
+                    <td class="indicator">${formatNum(r.lower)}</td>
+                    ${buySignalHtml}
+                    ${sellSignalHtml}
+                </tr>
+            `;
+        }).join('');
         
         contentDiv.innerHTML = `
             <table class="filter-results-table">
-                <thead>
-                    <tr>
-                        <th>代码</th>
-                        <th>名称</th>
-                        <th>现价</th>
-                        <th>波动率</th>
-                        <th>波动状态</th>
-                        <th>布林带位置</th>
-                        <th>上轨</th>
-                        <th>中轨</th>
-                        <th>下轨</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${results.map(r => {
-                        const volTag = getVolatilityTag(r.bandwidth);
-                        return `
-                            <tr onclick="addStockFromFilter('${r.code}', '${r.name}', '${r.market}')">
-                                <td class="code">${r.code}</td>
-                                <td class="name">${r.name}</td>
-                                <td class="indicator">${formatNum(r.price)}</td>
-                                <td class="indicator">${formatNum(r.bandwidth)}%</td>
-                                <td><span class="filter-tag ${volTag.class}">${volTag.text}</span></td>
-                                <td><span class="filter-tag ${r.position.class}">${r.position.text}</span></td>
-                                <td class="indicator">${formatNum(r.upper)}</td>
-                                <td class="indicator">${formatNum(r.mid)}</td>
-                                <td class="indicator">${formatNum(r.lower)}</td>
-                            </tr>
-                        `;
-                    }).join('')}
-                </tbody>
+                <thead>${tableHeader}</thead>
+                <tbody>${tableRows}</tbody>
             </table>
         `;
     }
