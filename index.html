@@ -383,16 +383,28 @@
             <div class="indicators-grid" id="indicators"></div>
             <div class="chart-container">
                 <div class="chart-header">
-                    <div class="chart-title">日K线 & 均线</div>
-                    <div class="period-btns">
-                        <button class="period-btn" data-period="5" onclick="setChartPeriod(5)">5日</button>
-                        <button class="period-btn" data-period="10" onclick="setChartPeriod(10)">10日</button>
-                        <button class="period-btn" data-period="30" onclick="setChartPeriod(30)">1月</button>
-                        <button class="period-btn" data-period="60" onclick="setChartPeriod(60)">2月</button>
-                        <button class="period-btn" data-period="90" onclick="setChartPeriod(90)">3月</button>
-                        <button class="period-btn active" data-period="180" onclick="setChartPeriod(180)">半年</button>
-                        <button class="period-btn" data-period="365" onclick="setChartPeriod(365)">1年</button>
-                        <button class="period-btn" data-period="0" onclick="setChartPeriod(0)">全部</button>
+                    <div class="chart-title" id="klineTitle">日K线 & 均线</div>
+                    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+                        <div class="period-btns" id="klineTypeBtns">
+                            <button class="period-btn" data-klt="1" onclick="setKlineType('1')">分时</button>
+                            <button class="period-btn" data-klt="5" onclick="setKlineType('5')">5分</button>
+                            <button class="period-btn" data-klt="15" onclick="setKlineType('15')">15分</button>
+                            <button class="period-btn" data-klt="30" onclick="setKlineType('30')">30分</button>
+                            <button class="period-btn" data-klt="60" onclick="setKlineType('60')">60分</button>
+                            <button class="period-btn active" data-klt="101" onclick="setKlineType('101')">日K</button>
+                            <button class="period-btn" data-klt="102" onclick="setKlineType('102')">周K</button>
+                            <button class="period-btn" data-klt="103" onclick="setKlineType('103')">月K</button>
+                        </div>
+                        <div class="period-btns" id="dayPeriodBtns">
+                            <button class="period-btn" data-period="5" onclick="setChartPeriod(5)">5日</button>
+                            <button class="period-btn" data-period="10" onclick="setChartPeriod(10)">10日</button>
+                            <button class="period-btn" data-period="30" onclick="setChartPeriod(30)">1月</button>
+                            <button class="period-btn" data-period="60" onclick="setChartPeriod(60)">2月</button>
+                            <button class="period-btn" data-period="90" onclick="setChartPeriod(90)">3月</button>
+                            <button class="period-btn active" data-period="180" onclick="setChartPeriod(180)">半年</button>
+                            <button class="period-btn" data-period="365" onclick="setChartPeriod(365)">1年</button>
+                            <button class="period-btn" data-period="0" onclick="setChartPeriod(0)">全部</button>
+                        </div>
                     </div>
                 </div>
                 <div class="chart-wrapper"><div id="chartKline" style="height:500px"></div></div>
@@ -498,6 +510,7 @@
     let charts = {};
     let klineDataCache = {};
     let currentPeriod = 180; // 默认半年
+    let currentKlineType = '101'; // K线类型：1=1分钟, 5=5分钟, 15=15分钟, 30=30分钟, 60=60分钟, 101=日K, 102=周K, 103=月K
 
     // MACD参数配置
     let macdParams = {
@@ -593,7 +606,7 @@
 
     // 从东方财富获取K线数据（获取全部历史数据，使用JSONP避免CORS）
     let klineCallbackId = 0;
-    function fetchKlineFromEastmoney(secid) {
+    function fetchKlineFromEastmoney(secid, klt = '101') {
         return new Promise((resolve, reject) => {
             const callbackName = '__kline_cb_' + (++klineCallbackId);
             const script = document.createElement('script');
@@ -630,8 +643,16 @@
                 resolve(result);
             };
 
-            const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get?cb=${callbackName}&secid=${secid}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&beg=0&end=20500101&lmt=10000`;
-            debug('请求东方财富K线数据: ' + url);
+            // 分钟K线获取较少数据，日K/周K/月K获取更多
+            let lmt = 10000;
+            if (klt === '1') lmt = 240; // 1分钟：1天约240根
+            else if (klt === '5') lmt = 480; // 5分钟：约2天
+            else if (klt === '15') lmt = 320; // 15分钟：约10天
+            else if (klt === '30') lmt = 480; // 30分钟：约20天
+            else if (klt === '60') lmt = 480; // 60分钟：约40天
+
+            const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get?cb=${callbackName}&secid=${secid}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=${klt}&fqt=1&beg=0&end=20500101&lmt=${lmt}`;
+            debug('请求东方财富K线数据(klt=' + klt + '): ' + url);
             script.src = url;
             script.onerror = function() {
                 cleanup();
@@ -674,11 +695,19 @@
         }
     }
 
-    async function fetchKlineData(secid) {
+    async function fetchKlineData(secid, klt = null) {
+        const klineType = klt || currentKlineType;
+        // 腾讯API只支持日K，分钟K线只能用东方财富
+        if (klineType !== '101' && klineType !== '102' && klineType !== '103') {
+            debug('分钟K线，使用东方财富API...');
+            let kline = await fetchKlineFromEastmoney(secid, klineType);
+            debug('东方财富API返回: ' + kline.length + '条');
+            return kline;
+        }
         try {
-            // 优先使用东方财富API获取全部历史数据
+            // 日K/周K/月K优先使用东方财富API
             debug('尝试东方财富API...');
-            let kline = await fetchKlineFromEastmoney(secid);
+            let kline = await fetchKlineFromEastmoney(secid, klineType);
             debug('东方财富API返回: ' + kline.length + '条');
             if (kline.length > 0) {
                 debug('使用东方财富数据，首条: ' + kline[0].date + '，末条: ' + kline[kline.length-1].date);
@@ -687,21 +716,51 @@
         } catch (e) {
             debug('东方财富API失败: ' + e.message);
         }
-        // 如果东方财富失败，使用腾讯API作为备用
-        debug('使用腾讯API备用方案');
-        let tencentKline = await fetchKlineFromTencent(secid);
-        debug('腾讯API返回: ' + tencentKline.length + '条');
-        return tencentKline;
+        // 如果东方财富失败，使用腾讯API作为备用（仅日K）
+        if (klineType === '101') {
+            debug('使用腾讯API备用方案');
+            let tencentKline = await fetchKlineFromTencent(secid);
+            debug('腾讯API返回: ' + tencentKline.length + '条');
+            return tencentKline;
+        }
+        return [];
     }
 
     // ==================== 核心逻辑 ====================
+    function setKlineType(klt) {
+        currentKlineType = klt;
+        localStorage.setItem('kline_type', klt);
+
+        // 更新按钮状态
+        document.querySelectorAll('#klineTypeBtns .period-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelector(`#klineTypeBtns .period-btn[data-klt="${klt}"]`).classList.add('active');
+
+        // 更新标题
+        const titleMap = {
+            '1': '分时图', '5': '5分钟K线', '15': '15分钟K线', '30': '30分钟K线',
+            '60': '60分钟K线', '101': '日K线', '102': '周K线', '103': '月K线'
+        };
+        document.getElementById('klineTitle').textContent = (titleMap[klt] || 'K线') + ' & 均线';
+
+        // 分钟K线隐藏日期周期按钮
+        const isMinute = ['1', '5', '15', '30', '60'].includes(klt);
+        document.getElementById('dayPeriodBtns').style.display = isMinute ? 'none' : 'flex';
+
+        // 清除缓存并重新加载
+        klineDataCache = {};
+        const activeSelected = getActiveSelected();
+        if (activeSelected) {
+            loadStock(activeSelected);
+        }
+    }
+
     function setChartPeriod(days) {
         currentPeriod = days;
         localStorage.setItem('chart_period', days);
-        
-        document.querySelectorAll('.period-btn').forEach(btn => btn.classList.remove('active'));
-        document.querySelector(`.period-btn[data-period="${days}"]`).classList.add('active');
-        
+
+        document.querySelectorAll('#dayPeriodBtns .period-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelector(`#dayPeriodBtns .period-btn[data-period="${days}"]`).classList.add('active');
+
         updateAllChartsZoom();
     }
 
@@ -836,13 +895,14 @@
         debug('加载' + (currentTab === 'etf' ? 'ETF' : '股票') + ': ' + stock.name + ' (' + secid + ')');
 
         try {
+            const cacheKey = code + '_' + currentKlineType;
             const [kline, quotes] = await Promise.all([
-                klineDataCache[code] || fetchKlineData(secid),
+                klineDataCache[cacheKey] || fetchKlineData(secid),
                 fetchRealtimeQuotes(activeWatchlist.map(s => s.market + '.' + s.code).join(','))
             ]);
 
             if (kline.length > 0) {
-                klineDataCache[code] = kline;
+                klineDataCache[cacheKey] = kline;
             }
 
             if (quotes.length > 0) {
@@ -944,13 +1004,15 @@
         e.stopPropagation();
         if (currentTab === 'stock') {
             watchlist = watchlist.filter(s => s.code !== code);
-            delete klineDataCache[code];
+            // 清除该股票所有K线类型的缓存
+            Object.keys(klineDataCache).forEach(key => { if (key.startsWith(code + '_')) delete klineDataCache[key]; });
             if (selectedCode === code) {
                 selectedCode = watchlist.length ? watchlist[0].code : null;
             }
         } else {
             etfWatchlist = etfWatchlist.filter(s => s.code !== code);
-            delete klineDataCache[code];
+            // 清除该ETF所有K线类型的缓存
+            Object.keys(klineDataCache).forEach(key => { if (key.startsWith(code + '_')) delete klineDataCache[key]; });
             if (selectedEtfCode === code) {
                 selectedEtfCode = etfWatchlist.length ? etfWatchlist[0].code : null;
             }
@@ -1719,12 +1781,13 @@
             const promises = batch.map(async (stock) => {
                 try {
                     const secid = stock.market + '.' + stock.code;
-                    let kline = klineDataCache[stock.code];
-                    
+                    const cacheKey = stock.code + '_' + currentKlineType;
+                    let kline = klineDataCache[cacheKey];
+
                     if (!kline) {
                         kline = await fetchKlineData(secid);
                         if (kline.length > 0) {
-                            klineDataCache[stock.code] = kline;
+                            klineDataCache[cacheKey] = kline;
                         }
                     }
                     
@@ -2200,12 +2263,32 @@
         // 清除K线数据缓存，确保获取最新数据
         klineDataCache = {};
         
+        // 恢复K线类型设置
+        const savedKlineType = localStorage.getItem('kline_type');
+        if (savedKlineType) {
+            currentKlineType = savedKlineType;
+            document.querySelectorAll('#klineTypeBtns .period-btn').forEach(btn => btn.classList.remove('active'));
+            const targetKltBtn = document.querySelector(`#klineTypeBtns .period-btn[data-klt="${currentKlineType}"]`);
+            if (targetKltBtn) {
+                targetKltBtn.classList.add('active');
+                // 更新标题
+                const titleMap = {
+                    '1': '分时图', '5': '5分钟K线', '15': '15分钟K线', '30': '30分钟K线',
+                    '60': '60分钟K线', '101': '日K线', '102': '周K线', '103': '月K线'
+                };
+                document.getElementById('klineTitle').textContent = (titleMap[currentKlineType] || 'K线') + ' & 均线';
+                // 分钟K线隐藏日期周期按钮
+                const isMinute = ['1', '5', '15', '30', '60'].includes(currentKlineType);
+                document.getElementById('dayPeriodBtns').style.display = isMinute ? 'none' : 'flex';
+            }
+        }
+
         // 恢复周期设置
         const savedPeriod = localStorage.getItem('chart_period');
         if (savedPeriod) {
             currentPeriod = parseInt(savedPeriod);
-            document.querySelectorAll('.period-btn').forEach(btn => btn.classList.remove('active'));
-            const targetBtn = document.querySelector(`.period-btn[data-period="${currentPeriod}"]`);
+            document.querySelectorAll('#dayPeriodBtns .period-btn').forEach(btn => btn.classList.remove('active'));
+            const targetBtn = document.querySelector(`#dayPeriodBtns .period-btn[data-period="${currentPeriod}"]`);
             if (targetBtn) targetBtn.classList.add('active');
         }
 
